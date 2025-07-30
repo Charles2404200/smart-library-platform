@@ -3,23 +3,30 @@ const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
 const mongoose = require('mongoose');
 require('dotenv').config();
-const analyticsRoutes = require('./routes/analytics.routes');
+
+// Route imports
 
 const app = express();
 const prisma = new PrismaClient();
 
+// Middleware
 app.use(cors());
 app.use(express.json());
 
+// PostgreSQL / MySQL via Prisma (no connect needed here, handled internally)
+
 // MongoDB connection
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => console.error("❌ MongoDB error:", err));
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Test route
-app.get('/', (req, res) => res.send("API is working"));
-app.use('/api/analytics', analyticsRoutes);
+// Basic route
+app.get('/', (req, res) => res.send('📚 Smart Library API running'));
 
-// Start server
-const PORT = 4000;
-app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+// Mount routes
+
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
