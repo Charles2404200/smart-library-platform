@@ -1,0 +1,85 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int         @id @default(autoincrement())
+  name      String
+  email     String      @unique
+  password  String
+  role      String      // 'reader' or 'staff'
+  checkouts Checkout[]
+  reviews   Review[]
+  logs      StaffLog[]
+}
+
+model Book {
+  id         Int          @id @default(autoincrement())
+  title      String
+  genre      String
+  publisher  String
+  copies     Int
+  checkouts  Checkout[]
+  reviews    Review[]
+  authors    BookAuthor[]
+}
+
+model Author {
+  id     Int          @id @default(autoincrement())
+  name   String
+  books  BookAuthor[]
+}
+
+// Many-to-many table for Book <-> Author
+model BookAuthor {
+  id        Int     @id @default(autoincrement())
+  book      Book    @relation(fields: [bookId], references: [id])
+  bookId    Int
+  author    Author  @relation(fields: [authorId], references: [id])
+  authorId  Int
+
+  @@unique([bookId, authorId])
+}
+
+model Checkout {
+  id          Int       @id @default(autoincrement())
+  user        User      @relation(fields: [userId], references: [id])
+  userId      Int
+  book        Book      @relation(fields: [bookId], references: [id])
+  bookId      Int
+  checkoutAt  DateTime  @default(now())
+  returnAt    DateTime?
+  isLate      Boolean?
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  book      Book     @relation(fields: [bookId], references: [id])
+  bookId    Int
+  rating    Int
+  comment   String
+  createdAt DateTime @default(now())
+}
+
+model StaffLog {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  action    String
+  target    String    // could be bookId or book title
+  createdAt DateTime  @default(now())
+}
+
