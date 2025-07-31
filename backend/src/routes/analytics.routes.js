@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { createSession } = require('../controllers/analytics.controller');
 
-router.post('/reading-session', createSession);
+// Test route
+router.get('/', (req, res) => {
+  res.send('🔍 Analytics route working');
+});
 
 module.exports = router;

@@ -4,10 +4,7 @@ const { PrismaClient } = require('@prisma/client');
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-// Route imports
-const analyticsRoutes = require('./routes/analytics.routes');
-const bookRoutes = require('./routes/book.routes'); // (Bạn cần tạo file này sau)
-const userRoutes = require('./routes/user.routes'); // (Bạn cần tạo file này sau)
+const analyticsRoutes = require('./routes/analytics.routes'); // Đảm bảo file này tồn tại và export router
 
 const app = express();
 const prisma = new PrismaClient();
@@ -15,8 +12,6 @@ const prisma = new PrismaClient();
 // Middleware
 app.use(cors());
 app.use(express.json());
-
-// PostgreSQL / MySQL via Prisma (no connect needed here, handled internally)
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI, {
@@ -26,13 +21,12 @@ mongoose.connect(process.env.MONGODB_URI, {
   .then(() => console.log('✅ MongoDB connected'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Basic route
+// Basic test route
 app.get('/', (req, res) => res.send('📚 Smart Library API running'));
 
-// Mount routes
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/books', bookRoutes); // for borrow, return, review, search
-app.use('/api/users', userRoutes); // for login, profile etc.
+// Mount additional routes
+app.use('/api/analytics', analyticsRoutes); // Nhớ export router trong analytics.routes.js
 
+// Start server
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
