@@ -3,6 +3,8 @@ const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
 const mongoose = require('mongoose');
 require('dotenv').config();
+const authRoutes = require('./routes/auth.routes');
+const bookRoutes = require('./routes/book.routes');
 
 const analyticsRoutes = require('./routes/analytics.routes'); // Đảm bảo file này tồn tại và export router
 
@@ -12,6 +14,8 @@ const prisma = new PrismaClient();
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use('/api/auth', authRoutes);
+app.use('/api/books', bookRoutes);
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI, {

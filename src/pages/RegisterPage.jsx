@@ -5,11 +5,26 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleRegister = (e) => {
-    e.preventDefault();
-    // TODO: Add registration logic here
-    alert(`Registering: ${name} - ${email}`);
-  };
+  const handleRegister = async (e) => {
+  e.preventDefault();
+  try {
+    const res = await fetch('http://localhost:4000/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password, role: 'reader' }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert('Registered successfully!');
+      window.location.href = '/login';
+    } else {
+      alert(data.error);
+    }
+  } catch (err) {
+    alert('Registration failed.');
+  }
+};
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-gray-100 to-gray-200 flex items-center justify-center p-4">
