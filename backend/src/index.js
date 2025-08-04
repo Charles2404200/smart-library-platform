@@ -1,25 +1,30 @@
 const express = require('express');
 const cors = require('cors');
-const { PrismaClient } = require('@prisma/client');
+const fs = require('fs');
+const mysql = require('mysql2/promise');
 const mongoose = require('mongoose');
 require('dotenv').config();
-const authRoutes = require('./routes/auth.routes');
-const bookRoutes = require('./routes/book.routes');
-const borrowRoutes = require('./routes/borrow.routes');
-
-const analyticsRoutes = require('./routes/analytics.routes'); // Đảm bảo file này tồn tại và export router
 
 const app = express();
-const prisma = new PrismaClient();
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use('/api/auth', authRoutes);
-app.use('/api/books', bookRoutes);
-app.use('/api', borrowRoutes);
+// ------------ MySQL Connection Pool ------------
+const pool = mysql.createPool({
+  uri: process.env.DATABASE_URL.replace('&ssl-mode=REQUIRED', ''), // Clean URI
+  ssl: {
+    ca: fs.readFileSync(process.env.MYSQL_SSL_CA),
+  },
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
 
-// MongoDB connection
+// Inject MySQL pool into every request
+app.use((req, res, next) => {
+  req.db = pool;
+  next();
+});
+
+// ------------ MongoDB Connection ------------
 mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
@@ -27,12 +32,70 @@ mongoose.connect(process.env.MONGODB_URI, {
   .then(() => console.log('✅ MongoDB connected'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Basic test route
-app.get('/', (req, res) => res.send('📚 Smart Library API running'));
+// ------------ Middleware ------------
+app.use(cors());
+app.use(express.json());
 
-// Mount additional routes
-app.use('/api/analytics', analyticsRoutes); // Nhớ export router trong analytics.routes.js
+// ------------ Route Imports (Safe Logging) ------------
+let authRoutes, userRoutes, bookRoutes, borrowRoutes, reviewRoutes, analyticsRoutes;
 
-// Start server
+try {
+  authRoutes = require('./routes/auth.routes');
+  bookRoutes = require('./routes/book.routes');
+  borrowRoutes = require('./routes/borrow.routes');
+  reviewRoutes = require('./routes/review.routes');
+  analyticsRoutes = require('./routes/analytics.routes');
+
+  try {
+    userRoutes = require('./routes/user.routes');
+  } catch (e) {
+    console.warn('⚠️ user.routes.js not found – skipping /api/users');
+  }
+} catch (err) {
+  console.error('❌ Error loading routes:', err);
+  process.exit(1);
+}
+
+// ------------ Debug Log of All Route Types ------------
+console.log('🧩 Route Modules Loaded:');
+console.log('authRoutes:', typeof authRoutes);
+console.log('userRoutes:', typeof userRoutes);
+console.log('bookRoutes:', typeof bookRoutes);
+console.log('borrowRoutes:', typeof borrowRoutes);
+console.log('reviewRoutes:', typeof reviewRoutes);
+console.log('analyticsRoutes:', typeof analyticsRoutes);
+
+// ------------ Route Mounting with Validation ------------
+try {
+  if (typeof authRoutes === 'function') app.use('/api/auth', authRoutes);
+  else console.warn('⚠️ authRoutes is not a function');
+
+  if (typeof userRoutes === 'function') app.use('/api/users', userRoutes);
+  else console.warn('⚠️ userRoutes is not a function or skipped');
+
+  if (typeof bookRoutes === 'function') app.use('/api/books', bookRoutes);
+  else console.warn('⚠️ bookRoutes is not a function');
+
+  if (typeof borrowRoutes === 'function') app.use('/api/borrow', borrowRoutes);
+  else console.warn('⚠️ borrowRoutes is not a function');
+
+  if (typeof reviewRoutes === 'function') app.use('/api/reviews', reviewRoutes);
+  else console.warn('⚠️ reviewRoutes is not a function');
+
+  if (typeof analyticsRoutes === 'function') app.use('/api/analytics', analyticsRoutes);
+  else console.warn('⚠️ analyticsRoutes is not a function');
+} catch (err) {
+  console.error('❌ Route registration failed:', err);
+  process.exit(1);
+}
+
+// ------------ Health Check ------------
+app.get('/', (req, res) => {
+  res.send('📚 Smart Library Platform API is live!');
+});
+
+// ------------ Start Server ------------
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
+});
