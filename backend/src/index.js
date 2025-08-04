@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 require('dotenv').config();
 const authRoutes = require('./routes/auth.routes');
 const bookRoutes = require('./routes/book.routes');
+const borrowRoutes = require('./routes/borrow.routes');
 
 const analyticsRoutes = require('./routes/analytics.routes'); // Đảm bảo file này tồn tại và export router
 
@@ -16,6 +17,7 @@ app.use(cors());
 app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/books', bookRoutes);
+app.use('/api', borrowRoutes);
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI, {
