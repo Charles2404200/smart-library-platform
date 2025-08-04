@@ -1,14 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
-/**
- * AdminPanelButton
- * Renders a "Admin Panel" button if user is authenticated and is staff.
- *
- * Props:
- * - user: current user object (must include "role")
- * - className: optional tailwind classes to style the button
- */
 export default function AdminPanelButton({ user, className = '' }) {
   if (!user || user.role !== 'staff') return null;
 

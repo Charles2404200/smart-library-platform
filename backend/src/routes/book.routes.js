@@ -10,19 +10,20 @@ router.get('/', async (req, res) => {
   try {
     const [books] = await conn.query(`
       SELECT 
-        b.id,
+        b.book_id AS id,
         b.title,
         b.genre,
-        b.publisher,
+        p.name AS publisher,
         b.copies,
         GROUP_CONCAT(a.name SEPARATOR ', ') AS authors
-      FROM Book b
-      LEFT JOIN BookAuthor ba ON b.id = ba.bookId
-      LEFT JOIN Author a ON ba.authorId = a.id
-      GROUP BY b.id
+      FROM books b
+      LEFT JOIN book_authors ba ON b.book_id = ba.book_id
+      LEFT JOIN authors a ON ba.author_id = a.author_id
+      LEFT JOIN publishers p ON b.publisher_id = p.publisher_id
+      GROUP BY b.book_id
     `);
 
-    res.json(books); // ✅ Return array of books
+    res.json(books);
   } catch (err) {
     console.error('❌ Error fetching books:', err);
     res.status(500).json({ error: 'Internal server error while fetching books' });
@@ -30,6 +31,7 @@ router.get('/', async (req, res) => {
     conn.release();
   }
 });
+
 
 /**
  * GET /api/books/:bookId

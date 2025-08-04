@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FaUserCircle } from 'react-icons/fa';
 import { HiOutlineMenu, HiOutlineX } from 'react-icons/hi';
-import AdminPanelButton from './AdminPanelButton';
 
 export default function Navbar({ isAuthenticated, onLogout, user }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -31,8 +30,8 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
           <Link to="/books" className="text-gray-700 hover:text-indigo-700 transition">View Books</Link>
           <Link to="/search" className="text-gray-700 hover:text-indigo-700 transition">Search</Link>
 
-          {isAuthenticated && user?.role === 'staff' && (
-            <AdminPanelButton user={user} />
+          {isAuthenticated && (user?.role === 'staff' || user?.role === 'admin') && (
+            <Link to="/admin" className="text-gray-700 hover:text-indigo-700 transition">Admin Panel</Link>
           )}
 
           {isAuthenticated ? (
@@ -78,8 +77,8 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
           <Link to="/books" className="block text-gray-700 hover:text-indigo-700">View Books</Link>
           <Link to="/search" className="block text-gray-700 hover:text-indigo-700">Search</Link>
 
-          {isAuthenticated && user?.role === 'staff' && (
-            <AdminPanelButton user={user} className="block w-full text-left" />
+          {isAuthenticated && (user?.role === 'staff' || user?.role === 'admin') && (
+            <Link to="/admin" className="block text-gray-700 hover:text-indigo-700">Admin Panel</Link>
           )}
 
           {isAuthenticated ? (

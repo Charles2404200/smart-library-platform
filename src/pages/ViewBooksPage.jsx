@@ -5,18 +5,28 @@ export default function ViewBooksPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('http://localhost:4000/api/books')
-      .then((res) => res.json())
-      .then((data) => {
-        console.log('📚 Fetched books:', data);
-        setBooks(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error('❌ Error fetching books:', err);
-        setLoading(false);
-      });
-  }, []);
+  fetch('http://localhost:4000/api/books')
+    .then((res) => res.json())
+    .then((data) => {
+      console.log('📚 Fetched books:', data);
+
+      // Nếu data là object chứa books bên trong
+      if (Array.isArray(data.books)) {
+        setBooks(data.books);
+      } else if (Array.isArray(data)) {
+        setBooks(data); // fallback nếu trực tiếp là array
+      } else {
+        setBooks([]); // fallback an toàn
+      }
+
+      setLoading(false);
+    })
+    .catch((err) => {
+      console.error('❌ Error fetching books:', err);
+      setLoading(false);
+    });
+}, []);
+
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
