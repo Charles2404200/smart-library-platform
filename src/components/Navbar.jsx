@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FaUserCircle } from 'react-icons/fa';
 import { HiOutlineMenu, HiOutlineX } from 'react-icons/hi';
-import ProfileMenu from './ProfileMenu';
+import AdminPanelButton from './AdminPanelButton';
 
-export default function Navbar({ isAuthenticated, onLogout }) {
+export default function Navbar({ isAuthenticated, onLogout, user }) {
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const navigate = useNavigate();
@@ -13,7 +13,7 @@ export default function Navbar({ isAuthenticated, onLogout }) {
   const toggleDropdown = () => setDropdownOpen(!dropdownOpen);
 
   const handleLogout = () => {
-    onLogout(); // clear auth state
+    onLogout();
     navigate('/login');
   };
 
@@ -28,8 +28,12 @@ export default function Navbar({ isAuthenticated, onLogout }) {
         {/* Desktop Menu */}
         <div className="hidden md:flex items-center space-x-6">
           <Link to="/" className="text-gray-700 hover:text-indigo-700 transition">Home</Link>
-          <Link to="/books" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">View Books</Link>
+          <Link to="/books" className="text-gray-700 hover:text-indigo-700 transition">View Books</Link>
           <Link to="/search" className="text-gray-700 hover:text-indigo-700 transition">Search</Link>
+
+          {isAuthenticated && user?.role === 'staff' && (
+            <AdminPanelButton user={user} />
+          )}
 
           {isAuthenticated ? (
             <div className="relative">
@@ -40,7 +44,6 @@ export default function Navbar({ isAuthenticated, onLogout }) {
                 <div className="absolute right-0 mt-2 w-48 bg-white border rounded shadow-lg z-50">
                   <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Profile</Link>
                   <Link to="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Dashboard</Link>
-                  <Link to="/books" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">View Books</Link>
                   <Link to="/borrowed" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Books Borrowed</Link>
                   <Link to="/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Settings</Link>
                   <button
@@ -60,7 +63,7 @@ export default function Navbar({ isAuthenticated, onLogout }) {
           )}
         </div>
 
-        {/* Mobile Menu Button */}
+        {/* Mobile Menu Toggle */}
         <div className="md:hidden">
           <button onClick={toggleMenu} className="text-2xl text-indigo-700 focus:outline-none">
             {isOpen ? <HiOutlineX /> : <HiOutlineMenu />}
@@ -72,14 +75,17 @@ export default function Navbar({ isAuthenticated, onLogout }) {
       {isOpen && (
         <div className="md:hidden px-4 pb-4 space-y-2">
           <Link to="/" className="block text-gray-700 hover:text-indigo-700">Home</Link>
-          <Link to="/books" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">View Books</Link>
+          <Link to="/books" className="block text-gray-700 hover:text-indigo-700">View Books</Link>
           <Link to="/search" className="block text-gray-700 hover:text-indigo-700">Search</Link>
+
+          {isAuthenticated && user?.role === 'staff' && (
+            <AdminPanelButton user={user} className="block w-full text-left" />
+          )}
 
           {isAuthenticated ? (
             <>
               <Link to="/profile" className="block text-gray-700 hover:text-indigo-700">My Profile</Link>
               <Link to="/dashboard" className="block text-gray-700 hover:text-indigo-700">Dashboard</Link>
-              <Link to="/books" className="block text-gray-700 hover:text-indigo-700">View Books</Link>
               <Link to="/borrowed" className="block text-gray-700 hover:text-indigo-700">Books Borrowed</Link>
               <Link to="/settings" className="block text-gray-700 hover:text-indigo-700">Settings</Link>
               <button

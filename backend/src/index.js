@@ -9,34 +9,34 @@ const app = express();
 
 // ------------ MySQL Connection Pool ------------
 const pool = mysql.createPool({
-  uri: process.env.DATABASE_URL.replace('&ssl-mode=REQUIRED', ''), // Clean URI
+  uri: process.env.DATABASE_URL.replace('&ssl-mode=REQUIRED', ''), // remove SSL hint
   ssl: {
-    ca: fs.readFileSync(process.env.MYSQL_SSL_CA),
+    ca: fs.readFileSync(process.env.MYSQL_SSL_CA), // path to ca.pem
   },
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
 });
 
-// Inject MySQL pool into every request
+// Inject MySQL pool into every request as req.db
 app.use((req, res, next) => {
   req.db = pool;
   next();
 });
 
-// ------------ MongoDB Connection ------------
+// ------------ MongoDB Connection (Mongoose) ------------
 mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch(err => console.error('❌ MongoDB connection error:', err));
+.then(() => console.log('✅ MongoDB connected'))
+.catch(err => console.error('❌ MongoDB connection error:', err));
 
 // ------------ Middleware ------------
 app.use(cors());
 app.use(express.json());
 
-// ------------ Route Imports (Safe Logging) ------------
+// ------------ Route Imports ------------
 let authRoutes, userRoutes, bookRoutes, borrowRoutes, reviewRoutes, analyticsRoutes;
 
 try {
@@ -56,7 +56,7 @@ try {
   process.exit(1);
 }
 
-// ------------ Debug Log of All Route Types ------------
+// ------------ Debug Route Types ------------
 console.log('🧩 Route Modules Loaded:');
 console.log('authRoutes:', typeof authRoutes);
 console.log('userRoutes:', typeof userRoutes);
@@ -65,7 +65,7 @@ console.log('borrowRoutes:', typeof borrowRoutes);
 console.log('reviewRoutes:', typeof reviewRoutes);
 console.log('analyticsRoutes:', typeof analyticsRoutes);
 
-// ------------ Route Mounting with Validation ------------
+// ------------ Route Mounting ------------
 try {
   if (typeof authRoutes === 'function') app.use('/api/auth', authRoutes);
   else console.warn('⚠️ authRoutes is not a function');
