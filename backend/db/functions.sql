@@ -1,8 +1,8 @@
 -- ============================
--- 📚 Stored Functions for Smart Library
+--  Stored Functions for Smart Library
 -- ============================
 
--- 💡 FUNCTION: Check if a book is available
+-- Check if a book is available
 DROP FUNCTION IF EXISTS IsBookAvailable;
 DELIMITER //
 CREATE FUNCTION IsBookAvailable(bookId INT)
@@ -17,7 +17,7 @@ END;
 DELIMITER ;
 
 
--- ⏰ FUNCTION: Check if book is returned on time
+-- Check if book is returned on time
 DROP FUNCTION IF EXISTS IsReturnedOnTime;
 DELIMITER //
 CREATE FUNCTION IsReturnedOnTime(checkoutId INT)
@@ -36,7 +36,7 @@ END;
 DELIMITER ;
 
 
--- 📈 FUNCTION: Count number of borrowed books in a time range
+-- Count number of borrowed books in a time range
 DROP FUNCTION IF EXISTS GetBorrowedCountInRange;
 DELIMITER //
 CREATE FUNCTION GetBorrowedCountInRange(startDate DATE, endDate DATE)
@@ -52,7 +52,7 @@ END;
 DELIMITER ;
 
 
--- ⭐ FUNCTION: Calculate average rating of a book
+-- Calculate average rating of a book
 DROP FUNCTION IF EXISTS GetAverageRating;
 DELIMITER //
 CREATE FUNCTION GetAverageRating(bookId INT)
@@ -67,7 +67,7 @@ END;
 DELIMITER ;
 
 
--- 🧾 FUNCTION: Count number of books a user has currently borrowed
+-- Count number of books a user has currently borrowed
 DROP FUNCTION IF EXISTS GetUserActiveBorrowCount;
 DELIMITER //
 CREATE FUNCTION GetUserActiveBorrowCount(userId INT)

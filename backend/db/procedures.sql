@@ -1,8 +1,8 @@
 -- =======================
--- 📚 Stored Procedures for Smart Library
+-- Stored Procedures for Smart Library
 -- =======================
 
--- 🧾 Procedure: BorrowBook
+--  Procedure: BorrowBook
 DROP PROCEDURE IF EXISTS BorrowBook;
 DELIMITER //
 CREATE PROCEDURE BorrowBook(IN userId INT, IN bookId INT)
@@ -64,7 +64,7 @@ END;
 DELIMITER ;
 
 
--- ➕ Procedure: AddBook
+-- Procedure: AddBook
 DROP PROCEDURE IF EXISTS AddBook;
 DELIMITER //
 CREATE PROCEDURE AddBook(
@@ -81,7 +81,7 @@ END;
 DELIMITER ;
 
 
--- 🔁 Procedure: UpdateBookInventory
+--  Procedure: UpdateBookInventory
 DROP PROCEDURE IF EXISTS UpdateBookInventory;
 DELIMITER //
 CREATE PROCEDURE UpdateBookInventory(
@@ -95,7 +95,7 @@ END;
 DELIMITER ;
 
 
--- 🗑️ Procedure: RetireBook
+--  Procedure: RetireBook
 DROP PROCEDURE IF EXISTS RetireBook;
 DELIMITER //
 CREATE PROCEDURE RetireBook(IN bookId INT)
@@ -106,7 +106,7 @@ END;
 DELIMITER ;
 
 
--- 📊 Procedure: LogStaffAction
+--  Procedure: LogStaffAction
 DROP PROCEDURE IF EXISTS LogStaffAction;
 DELIMITER //
 CREATE PROCEDURE LogStaffAction(

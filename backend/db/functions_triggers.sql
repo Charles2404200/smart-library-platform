@@ -1,5 +1,5 @@
 -- =======================
--- 🔁 Triggers
+-- Triggers
 -- =======================
 
 DROP TRIGGER IF EXISTS trg_borrow_book;
