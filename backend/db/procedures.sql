@@ -3,6 +3,7 @@
 -- =======================
 
 --  Procedure: BorrowBook
+USE smartlibrary_db;
 DROP PROCEDURE IF EXISTS BorrowBook;
 DELIMITER //
 CREATE PROCEDURE BorrowBook(IN userId INT, IN bookId INT)
