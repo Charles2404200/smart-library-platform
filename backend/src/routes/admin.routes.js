@@ -25,16 +25,14 @@ function verifyStaffOrAdmin(req, res, next) {
 
 // -------------------- Add a New Book --------------------
 router.post('/add', verifyStaffOrAdmin, async (req, res) => {
-  const { title, genre, publisher_id, copies } = req.body;
+  const { title, genre, publisher, copies } = req.body;
   const db = req.db;
-
-  const finalPublisherId = publisher_id === '' ? null : publisher_id;
 
   try {
     const [result] = await db.execute(
       `INSERT INTO books (title, genre, publisher_id, copies, available_copies)
        VALUES (?, ?, ?, ?, ?)`,
-      [title, genre, finalPublisherId, copies, copies]
+      [title, genre, publisher, copies, copies]
     );
 
     // Log action

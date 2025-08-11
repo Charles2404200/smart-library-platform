@@ -4,15 +4,14 @@ const path = require('path');
 const dotenv = require('dotenv');
 const { URL } = require('url');
 
+// Load .env
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
-// Read ALL SQL files. Ensure these files do NOT contain the DELIMITER command.
+// Read SQL files
 const schemaSql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
 const dataSql = fs.readFileSync(path.join(__dirname, 'sample_data.sql'), 'utf8');
-const proceduresSql = fs.readFileSync(path.join(__dirname, 'procedures.sql'), 'utf8');
-const functionsSql = fs.readFileSync(path.join(__dirname, 'functions.sql'), 'utf8');
-const triggersSql = fs.readFileSync(path.join(__dirname, 'functions_triggers.sql'), 'utf8');
 
+// Parse connection info
 const dbUrl = new URL(process.env.DATABASE_URL);
 
 const connection = mysql.createConnection({
@@ -21,38 +20,30 @@ const connection = mysql.createConnection({
   user: dbUrl.username,
   password: dbUrl.password,
   database: dbUrl.pathname.slice(1),
-  ssl: { rejectUnauthorized: false },
-  multipleStatements: true, // This option is crucial
+  ssl: {
+    rejectUnauthorized: false
+  },
+  multipleStatements: true
 });
 
-console.log('🚀 Connecting to database and resetting...');
+console.log('🚀 Connecting to database and resetting schema/data...');
 
-async function runQueries() {
-  try {
-    await connection.promise().query(schemaSql);
-    console.log('✅ schema.sql executed.');
-
-    await connection.promise().query(dataSql);
-    console.log('✅ sample_data.sql executed.');
-
-    // Execute the entire file content as one multi-statement query
-    await connection.promise().query(proceduresSql);
-    console.log('✅ procedures.sql executed.');
-
-    await connection.promise().query(functionsSql);
-    console.log('✅ functions.sql executed.');
-    
-    await connection.promise().query(triggersSql);
-    console.log('✅ functions_triggers.sql executed.');
-
-    console.log('🎉 Database is ready.');
-  } catch (err) {
-    console.error('❌ SQL Script Error:', err.sqlMessage || err.message);
-    // Log the full error object for more details
+connection.query(schemaSql, (err) => {
+  if (err) {
+    console.error('❌ Failed to run schema.sql');
     console.error(err);
-  } finally {
-    connection.end();
+    process.exit(1);
   }
-}
+  console.log('✅ schema.sql executed.');
 
-runQueries();
+  connection.query(dataSql, (err2) => {
+    if (err2) {
+      console.error('❌ Failed to run sample_data.sql');
+      console.error(err2);
+      process.exit(1);
+    }
+    console.log('✅ sample_data.sql executed.');
+    console.log('🎉 Database is ready.');
+    connection.end();
+  });
+});

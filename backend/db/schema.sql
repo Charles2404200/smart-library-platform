@@ -1,3 +1,7 @@
+--Recreate the database
+CREATE DATABASE IF NOT EXISTS defaultdb;
+USE defaultdb;
+
 -- Temporarily disable foreign key checks
 SET FOREIGN_KEY_CHECKS = 0;
 
@@ -37,7 +41,7 @@ CREATE TABLE authors (
 
 -- Books table
 CREATE TABLE books (
-  book_id INT AUTO_INCREMENT PRIMARY KEY,
+  book_id INT PRIMARY KEY,
   title VARCHAR(255),
   genre VARCHAR(100),
   publisher_id INT,
@@ -58,13 +62,13 @@ CREATE TABLE book_authors (
 -- Book checkout table
 CREATE TABLE checkout (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT,
-  book_id INT,
-  checkout_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  return_at DATETIME,
-  is_late BOOLEAN,
-  CONSTRAINT fk_checkout_user FOREIGN KEY (user_id) REFERENCES users(id),
-  CONSTRAINT fk_checkout_book FOREIGN KEY (book_id) REFERENCES books(book_id)
+  userId INT,
+  bookId INT,
+  checkoutAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+  returnAt DATETIME,
+  isLate BOOLEAN,
+  CONSTRAINT fk_checkout_user FOREIGN KEY (userId) REFERENCES users(id),
+  CONSTRAINT fk_checkout_book FOREIGN KEY (bookId) REFERENCES books(book_id)
 );
 
 -- Review table
