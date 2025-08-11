@@ -30,7 +30,6 @@ export default function ViewBooksPage() {
       const token = localStorage.getItem('token');
       if (!token) return alert('Please log in to borrow a book.');
 
-      // Không cần decode nếu không dùng userId
       const res = await fetch('http://localhost:4000/api/borrow/borrow', {
         method: 'POST',
         headers: {

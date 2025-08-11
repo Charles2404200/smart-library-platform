@@ -7,6 +7,7 @@ import RegisterPage from './pages/RegisterPage';
 import Navbar from './components/Navbar';
 import ViewBooksPage from './pages/ViewBooksPage';
 import AdminDashboard from './pages/AdminDashboard';
+import ManageBooksPage from './pages/ManageBooksPage';
 
 
 function App() {
@@ -52,6 +53,7 @@ function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/books" element={<ViewBooksPage />} />
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin/books" element={<ManageBooksPage />} />
       </Routes>
     </Router>
   );
