@@ -1,28 +1,31 @@
 import React, { useEffect, useState } from 'react';
-import { jwtDecode } from 'jwt-decode';
 
 export default function ViewBooksPage() {
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [borrowStatus, setBorrowStatus] = useState(null);
 
-  useEffect(() => {
-    fetch('http://localhost:4000/api/books')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data.books)) {
-          setBooks(data.books);
-        } else if (Array.isArray(data)) {
-          setBooks(data);
-        } else {
-          setBooks([]);
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error('❌ Error fetching books:', err);
-        setLoading(false);
+  const fetchBooks = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://localhost:4000/api/books', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setBooks(data);
+      } else {
+        setBooks([]);
+      }
+    } catch (err) {
+      console.error('❌ Error fetching books:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBooks();
   }, []);
 
   const handleBorrow = async (bookId) => {
@@ -30,25 +33,52 @@ export default function ViewBooksPage() {
       const token = localStorage.getItem('token');
       if (!token) return alert('Please log in to borrow a book.');
 
-      // Không cần decode nếu không dùng userId
       const res = await fetch('http://localhost:4000/api/borrow/borrow', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`, // ✅ truyền token qua header
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ bookId }), // ✅ chỉ gửi bookId
+        body: JSON.stringify({ bookId }),
       });
 
       const result = await res.json();
       if (res.ok) {
         setBorrowStatus(`✅ Borrowed book ID ${bookId} successfully`);
+        fetchBooks();
       } else {
         setBorrowStatus(`❌ Failed to borrow: ${result.error || 'Unknown error'}`);
       }
     } catch (err) {
       console.error('❌ Borrow error:', err);
       setBorrowStatus('❌ Borrow failed');
+    }
+  };
+
+  const handleReturn = async (checkoutId) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return alert('Please log in to return a book.');
+
+      const res = await fetch('http://localhost:4000/api/borrow/return', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ checkoutId }),
+      });
+
+      const result = await res.json();
+      if (res.ok) {
+        setBorrowStatus(`✅ Returned book successfully`);
+        fetchBooks();
+      } else {
+        setBorrowStatus(`❌ Failed to return: ${result.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('❌ Return error:', err);
+      setBorrowStatus('❌ Return failed');
     }
   };
 
@@ -79,12 +109,21 @@ export default function ViewBooksPage() {
               <p className="text-gray-600 text-sm">🏷 Genre: {book.genre}</p>
               <p className="text-gray-600 text-sm">📦 Copies: {book.copies}</p>
 
-              <button
-                className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
-                onClick={() => handleBorrow(book.id)}
-              >
-                Borrow
-              </button>
+              {book.borrowed ? (
+                <button
+                  className="mt-3 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                  onClick={() => handleReturn(book.checkoutId)}
+                >
+                  Return
+                </button>
+              ) : (
+                <button
+                  className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                  onClick={() => handleBorrow(book.id)}
+                >
+                  Borrow
+                </button>
+              )}
             </div>
           ))}
         </div>

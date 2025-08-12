@@ -2,37 +2,63 @@ const express = require('express');
 const router = express.Router();
 const authenticateJWT = require('../../middlewares/authMiddleware');
 
-// -------------------- Borrow a Book --------------------
+/**
+ * POST /api/borrow/borrow
+ * Borrow a book
+ */
 router.post('/borrow', authenticateJWT, async (req, res) => {
-  const { bookId } = req.body;
-  const userId = req.user?.id;
-
-  console.log('📥 Borrow Request:', { userId, bookId });
-
-  if (!bookId || !userId) {
-    return res.status(400).json({ error: 'Missing bookId or userId' });
-  }
-
-  const conn = await req.db.getConnection();
   try {
-    const [result] = await conn.query('CALL BorrowBook(?, ?)', [userId, bookId]);
+    const { bookId } = req.body;
+    const userId = req.user && (typeof req.user.id === 'number' ? req.user.id : Number(req.user.id));
 
-    console.log('✅ BorrowBook result:', result);
-    res.status(200).json({
-      message: '✅ Book borrowed successfully',
-      result,
-    });
+    console.log('📥 Borrow Request (raw):', { user: req.user, body: req.body });
+
+    if (!bookId || Number.isNaN(Number(bookId))) {
+      return res.status(400).json({ error: 'Invalid or missing bookId' });
+    }
+    if (!userId || Number.isNaN(userId)) {
+      return res.status(401).json({ error: 'Unauthorized: missing or invalid user' });
+    }
+
+    if (!req.db || typeof req.db.getConnection !== 'function') {
+      console.error('❌ req.db is not available (middleware not mounted?)');
+      return res.status(500).json({ error: 'Server DB configuration error' });
+    }
+
+    const conn = await req.db.getConnection();
+    try {
+      await conn.beginTransaction?.();
+
+      const [rows] = await conn.query('CALL BorrowBook(?, ?)', [userId, Number(bookId)]);
+      console.log('🔁 Raw BorrowBook response:', rows);
+
+      await conn.commit?.();
+
+      console.log('✅ BorrowBook completed:', { userId, bookId });
+      return res.status(200).json({
+        message: 'Book borrowed successfully',
+        result: rows
+      });
+    } catch (innerErr) {
+      await conn.rollback?.();
+      console.error('❌ Borrow book error:', innerErr);
+      return res.status(500).json({ error: 'Internal server error during borrow' });
+    } finally {
+      conn.release();
+    }
   } catch (err) {
-    console.error('❌ Borrow book error:', err.message);
-    res.status(500).json({ error: 'Internal server error during borrow' });
-  } finally {
-    conn.release();
+    console.error('❌ Unexpected error in /borrow route:', err);
+    return res.status(500).json({ error: 'Unexpected server error' });
   }
 });
 
-// -------------------- Return a Book --------------------
+/**
+ * POST /api/borrow/return
+ * Return a borrowed book
+ */
 router.post('/return', authenticateJWT, async (req, res) => {
   const { checkoutId } = req.body;
+  const userId = req.user?.id;
 
   if (!checkoutId) {
     return res.status(400).json({ error: 'Missing checkoutId' });
@@ -40,38 +66,21 @@ router.post('/return', authenticateJWT, async (req, res) => {
 
   const conn = await req.db.getConnection();
   try {
-    const [result] = await conn.query('CALL ReturnBook(?)', [checkoutId]);
-    console.log('✅ ReturnBook result:', result);
-    res.status(200).json({
-      message: '✅ Book returned successfully',
-      result,
-    });
+    const [result] = await conn.query(
+      `UPDATE checkout 
+       SET return_at = NOW()
+       WHERE id = ? AND user_id = ? AND return_at IS NULL`,
+      [checkoutId, userId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(400).json({ error: 'Book already returned or not found' });
+    }
+
+    res.json({ message: 'Book returned successfully' });
   } catch (err) {
-    console.error('❌ Return book error:', err.message);
-    res.status(500).json({ error: 'Internal server error during return' });
-  } finally {
-    conn.release();
-  }
-});
-
-// -------------------- View Borrowed Books --------------------
-router.get('/my-borrows', authenticateJWT, async (req, res) => {
-  const userId = req.user?.id;
-
-  const conn = await req.db.getConnection();
-  try {
-    const [rows] = await conn.query(`
-      SELECT c.id as checkoutId, b.title, c.borrowDate, c.returnDate
-      FROM checkouts c
-      JOIN books b ON c.bookId = b.id
-      WHERE c.userId = ?
-      ORDER BY c.borrowDate DESC
-    `, [userId]);
-
-    res.status(200).json({ borrows: rows });
-  } catch (err) {
-    console.error('❌ Fetch borrow history error:', err.message);
-    res.status(500).json({ error: 'Internal server error while fetching borrows' });
+    console.error('❌ Error returning book:', err);
+    res.status(500).json({ error: 'Internal server error while returning book' });
   } finally {
     conn.release();
   }
