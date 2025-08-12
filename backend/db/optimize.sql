@@ -1,5 +1,5 @@
 -- ==========================
--- 📈 Index Optimization
+--  Index Optimization
 -- ==========================
 
 -- Index for fast login/auth lookup
@@ -21,12 +21,3 @@ CREATE INDEX idx_checkout_date ON Checkout(checkoutAt, returnAt);
 
 -- Index to speed up logs filtering by staff
 CREATE INDEX idx_stafflog_staffId ON StaffLog(staffId);
-
--- ==========================
--- 💡 Query Optimization Tips
--- ==========================
-
--- Prefer covering indexes for SELECTs
--- Avoid SELECT * when only a few columns are needed
--- Use LIMIT for paginated data (e.g., book search)
--- Avoid using functions on indexed columns in WHERE clause (make queries sargable)

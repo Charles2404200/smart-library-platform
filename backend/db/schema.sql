@@ -1,11 +1,7 @@
---Recreate the database
-CREATE DATABASE IF NOT EXISTS defaultdb;
-USE defaultdb;
-
 -- Temporarily disable foreign key checks
 SET FOREIGN_KEY_CHECKS = 0;
 
---  Drop tables in reverse dependency order
+-- Drop tables in reverse dependency order
 DROP TABLE IF EXISTS staff_log;
 DROP TABLE IF EXISTS review;
 DROP TABLE IF EXISTS checkout;
@@ -33,7 +29,7 @@ CREATE TABLE publishers (
   address VARCHAR(255)
 );
 
---  Authors table
+-- Authors table
 CREATE TABLE authors (
   author_id INT PRIMARY KEY,
   name VARCHAR(100) NOT NULL
@@ -50,7 +46,7 @@ CREATE TABLE books (
   CONSTRAINT fk_books_publisher FOREIGN KEY (publisher_id) REFERENCES publishers(publisher_id)
 );
 
--- Many-to-many relationship table between books and authors
+-- Many-to-many relationship between books and authors
 CREATE TABLE book_authors (
   book_id INT,
   author_id INT,
@@ -59,7 +55,7 @@ CREATE TABLE book_authors (
   CONSTRAINT fk_book_authors_author FOREIGN KEY (author_id) REFERENCES authors(author_id) ON DELETE CASCADE
 );
 
--- Book checkout table
+-- Checkout table
 CREATE TABLE checkout (
   id INT AUTO_INCREMENT PRIMARY KEY,
   userId INT,

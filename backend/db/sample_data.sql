@@ -6,6 +6,12 @@ INSERT INTO publishers (publisher_id, name, address) VALUES
 (4, 'Oxford University Press', 'Oxford'),
 (5, 'Macmillan Publishers', 'Berlin');
 
+-- Users (seed)
+INSERT INTO users (id, name, email, password, role) VALUES
+(1, 'Admin One',  'admin1@example.com',  '$2a$10$dummyhash', 'admin'),
+(2, 'Reader Two', 'reader2@example.com', '$2a$10$dummyhash', 'reader'),
+(3, 'Staff Three','staff3@example.com',  '$2a$10$dummyhash', 'staff');
+
 -- Authors
 INSERT INTO authors (author_id, name) VALUES
 (1, 'George Orwell'),

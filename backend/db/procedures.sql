@@ -1,122 +1,125 @@
--- =======================
--- Stored Procedures for Smart Library
--- =======================
+-- Stored Procedures — Smart Library (MySQL 8)
+-- Tables: books(book_id, copies, available_copies), checkout(id,userId,bookId,checkoutAt,returnAt,isLate), review, staff_log
 
---  Procedure: BorrowBook
-USE smartlibrary_db;
 DROP PROCEDURE IF EXISTS BorrowBook;
-DELIMITER //
-CREATE PROCEDURE BorrowBook(IN userId INT, IN bookId INT)
+CREATE PROCEDURE BorrowBook(IN pUserId INT, IN pBookId INT)
 BEGIN
-  DECLARE currentCopies INT;
+  DECLARE vAvail INT;
 
-  -- Check availability
-  SELECT copies INTO currentCopies FROM Book WHERE id = bookId;
+  START TRANSACTION;
 
-  IF currentCopies <= 0 THEN
+  SELECT available_copies INTO vAvail
+  FROM books
+  WHERE book_id = pBookId
+  FOR UPDATE;
+
+  IF vAvail IS NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Book not found';
+  END IF;
+
+  IF vAvail <= 0 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No copies available';
   END IF;
 
-  -- Update inventory and insert checkout
-  UPDATE Book SET copies = copies - 1 WHERE id = bookId;
-  INSERT INTO Checkout (userId, bookId, checkoutAt) VALUES (userId, bookId, NOW());
+  INSERT INTO checkout(userId, bookId) VALUES(pUserId, pBookId);
+
+  UPDATE books
+  SET available_copies = available_copies - 1
+  WHERE book_id = pBookId;
+
+  COMMIT;
+
+  SELECT LAST_INSERT_ID() AS checkoutId, pBookId AS bookId;
 END;
-//
-DELIMITER ;
 
-
--- 🔄 Procedure: ReturnBook
 DROP PROCEDURE IF EXISTS ReturnBook;
-DELIMITER //
-CREATE PROCEDURE ReturnBook(IN checkoutId INT)
+CREATE PROCEDURE ReturnBook(IN pCheckoutId INT)
 BEGIN
-  DECLARE bId INT;
-  DECLARE isLate BOOLEAN;
+  DECLARE vBookId INT;
+  DECLARE vCheckoutAt DATETIME;
+  DECLARE vReturnAt DATETIME;
+  DECLARE vIsLate BOOLEAN;
+  DECLARE vGraceDays INT DEFAULT 14;
 
-  SELECT bookId INTO bId FROM Checkout WHERE id = checkoutId;
+  START TRANSACTION;
 
-  -- Check if overdue (after 14 days)
-  SET isLate = (SELECT returnAt IS NULL AND NOW() > DATE_ADD(checkoutAt, INTERVAL 14 DAY) FROM Checkout WHERE id = checkoutId);
+  SELECT bookId, checkoutAt, returnAt
+    INTO vBookId, vCheckoutAt, vReturnAt
+  FROM checkout
+  WHERE id = pCheckoutId
+  FOR UPDATE;
 
-  UPDATE Checkout
-  SET returnAt = NOW(), isLate = isLate
-  WHERE id = checkoutId;
+  IF vBookId IS NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Checkout not found';
+  END IF;
 
-  UPDATE Book SET copies = copies + 1 WHERE id = bId;
+  IF vReturnAt IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Already returned';
+  END IF;
+
+  SET vIsLate = TIMESTAMPDIFF(DAY, vCheckoutAt, NOW()) > vGraceDays;
+
+  UPDATE checkout
+  SET returnAt = NOW(),
+      isLate  = vIsLate
+  WHERE id = pCheckoutId;
+
+  UPDATE books
+  SET available_copies = LEAST(copies, available_copies + 1)
+  WHERE book_id = vBookId;
+
+  COMMIT;
+
+  SELECT pCheckoutId AS checkoutId, vBookId AS bookId, vIsLate AS isLate;
 END;
-//
-DELIMITER ;
 
-
--- ✍️ Procedure: AddBookReview
 DROP PROCEDURE IF EXISTS AddBookReview;
-DELIMITER //
 CREATE PROCEDURE AddBookReview(
-  IN userId INT,
-  IN bookId INT,
-  IN rating INT,
-  IN comment TEXT
+  IN pUserId INT,
+  IN pBookId INT,
+  IN pRating INT,
+  IN pComment TEXT
 )
 BEGIN
-  INSERT INTO Review (userId, bookId, rating, comment, createdAt)
-  VALUES (userId, bookId, rating, comment, NOW());
+  INSERT INTO review (userId, bookId, rating, comment, createdAt)
+  VALUES (pUserId, pBookId, pRating, pComment, NOW());
 END;
-//
-DELIMITER ;
 
-
--- Procedure: AddBook
 DROP PROCEDURE IF EXISTS AddBook;
-DELIMITER //
 CREATE PROCEDURE AddBook(
-  IN title VARCHAR(255),
-  IN genre VARCHAR(255),
-  IN publisher VARCHAR(255),
-  IN copies INT
+  IN pTitle VARCHAR(255),
+  IN pGenre VARCHAR(100),
+  IN pPublisherId INT,
+  IN pCopies INT
 )
 BEGIN
-  INSERT INTO Book (title, genre, publisher, copies)
-  VALUES (title, genre, publisher, copies);
+  INSERT INTO books (title, genre, publisher_id, copies, available_copies)
+  VALUES (pTitle, pGenre, pPublisherId, pCopies, pCopies);
 END;
-//
-DELIMITER ;
 
-
---  Procedure: UpdateBookInventory
 DROP PROCEDURE IF EXISTS UpdateBookInventory;
-DELIMITER //
 CREATE PROCEDURE UpdateBookInventory(
-  IN bookId INT,
-  IN newCopies INT
+  IN pBookId INT,
+  IN pNewCopies INT
 )
 BEGIN
-  UPDATE Book SET copies = newCopies WHERE id = bookId;
+  START TRANSACTION;
+  UPDATE books
+  SET copies = pNewCopies,
+      available_copies = LEAST(pNewCopies, GREATEST(0, available_copies))
+  WHERE book_id = pBookId;
+  COMMIT;
 END;
-//
-DELIMITER ;
 
-
---  Procedure: RetireBook
 DROP PROCEDURE IF EXISTS RetireBook;
-DELIMITER //
-CREATE PROCEDURE RetireBook(IN bookId INT)
+CREATE PROCEDURE RetireBook(IN pBookId INT)
 BEGIN
-  DELETE FROM Book WHERE id = bookId;
+  DELETE FROM books WHERE book_id = pBookId;
 END;
-//
-DELIMITER ;
 
-
---  Procedure: LogStaffAction
 DROP PROCEDURE IF EXISTS LogStaffAction;
-DELIMITER //
-CREATE PROCEDURE LogStaffAction(
-  IN staffId INT,
-  IN action TEXT
-)
+CREATE PROCEDURE LogStaffAction(IN pStaffId INT, IN pAction TEXT)
 BEGIN
-  INSERT INTO StaffLog (staffId, action, createdAt)
-  VALUES (staffId, action, NOW());
+  INSERT INTO staff_log (staffId, action, createdAt)
+  VALUES (pStaffId, pAction, NOW());
 END;
-//
-DELIMITER ;

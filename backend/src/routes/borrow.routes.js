@@ -55,6 +55,7 @@ router.post('/return', authenticateJWT, async (req, res) => {
 });
 
 // -------------------- View Borrowed Books --------------------
+// -------------------- View Borrowed Books --------------------
 router.get('/my-borrows', authenticateJWT, async (req, res) => {
   const userId = req.user?.id;
 
@@ -76,5 +77,6 @@ router.get('/my-borrows', authenticateJWT, async (req, res) => {
     conn.release();
   }
 });
+
 
 module.exports = router;
