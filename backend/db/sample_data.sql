@@ -12,7 +12,7 @@ INSERT INTO users (id, name, email, password, role) VALUES
 (2, 'Reader Two', 'reader2@example.com', '$2a$10$dummyhash', 'reader'),
 (3, 'Staff Three','staff3@example.com',  '$2a$10$dummyhash', 'staff');
 
--- Authors
+-- Authorsno
 INSERT INTO authors (author_id, name) VALUES
 (1, 'George Orwell'),
 (2, 'J.K. Rowling'),
