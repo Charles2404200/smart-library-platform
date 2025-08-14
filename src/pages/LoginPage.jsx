@@ -9,6 +9,7 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      console.log(``)
       const res = await fetch('http://localhost:4000/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -16,7 +17,7 @@ export default function LoginPage() {
       });
 
       const data = await res.json();
-
+console.log("data ={}"+JSON.stringify(data))
       if (res.ok) {
         // ✅ Save token and user info to localStorage
         localStorage.setItem('token', data.token);

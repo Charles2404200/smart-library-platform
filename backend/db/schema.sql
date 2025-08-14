@@ -88,3 +88,22 @@ CREATE TABLE staff_log (
   createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_stafflog_user FOREIGN KEY (staffId) REFERENCES users(id)
 );
+
+-- Many-to-many for publishers (keep books.publisher_id as primary publisher)
+CREATE TABLE IF NOT EXISTS book_publishers (
+  book_id INT NOT NULL,
+  publisher_id INT NOT NULL,
+  PRIMARY KEY (book_id, publisher_id),
+  CONSTRAINT fk_bp_book FOREIGN KEY (book_id) REFERENCES books(book_id) ON DELETE CASCADE,
+  CONSTRAINT fk_bp_pub  FOREIGN KEY (publisher_id) REFERENCES publishers(publisher_id) ON DELETE CASCADE
+);
+
+-- Optional backfill: mirror existing primary publisher to the M2M table
+INSERT IGNORE INTO book_publishers (book_id, publisher_id)
+SELECT b.book_id, b.publisher_id
+FROM books b
+WHERE b.publisher_id IS NOT NULL;
+
+
+ALTER TABLE books
+  ADD COLUMN image_url VARCHAR(255) NULL;

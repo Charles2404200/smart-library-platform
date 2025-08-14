@@ -5,6 +5,7 @@ const router = express.Router();
  * GET /api/books
  * Fetch all books with author names and publisher
  */
+// book.route.js
 router.get('/', async (req, res) => {
   const conn = await req.db.getConnection();
   try {
@@ -15,6 +16,8 @@ router.get('/', async (req, res) => {
         b.genre,
         p.name AS publisher,
         b.copies,
+        b.available_copies,
+        b.image_url,                              -- 👈 add this
         GROUP_CONCAT(a.name SEPARATOR ', ') AS authors
       FROM books b
       LEFT JOIN book_authors ba ON b.book_id = ba.book_id
@@ -31,7 +34,6 @@ router.get('/', async (req, res) => {
     conn.release();
   }
 });
-
 
 /**
  * GET /api/books/:bookId

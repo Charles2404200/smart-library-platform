@@ -56,18 +56,21 @@ router.post('/login', async (req, res) => {
 
   const conn = await req.db.getConnection();
   try {
-    const [rows] = await conn.query('SELECT * FROM users WHERE email = ?', [email]);
+
+    const [rows] = await conn.query('SELECT * FROM users WHERE email = ? limit 1', [email]);
+
+    console.log('Logging in user:', rows.length);
+
     if (rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-
     const user = rows[0];
 
     const isMatch = await bcrypt.compare(password, user.password);
+    //const isMatch = password === user.password;
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       JWT_SECRET,

@@ -3,6 +3,8 @@ const cors = require('cors');
 const fs = require('fs');
 const mysql = require('mysql2/promise');
 const mongoose = require('mongoose');
+const path = require('path');
+const multer = require('multer');
 require('dotenv').config();
 
 const app = express();
@@ -36,6 +38,35 @@ mongoose.connect(process.env.MONGODB_URI, {
 // ----------- Middleware -----------
 app.use(cors());
 app.use(express.json());
+
+// ----------- Multer Config for Book Images -----------
+const bookStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadPath = path.join(__dirname, '../uploads/books');
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
+    }
+    cb(null, uploadPath);
+  },
+  filename: function (req, file, cb) {
+    // Unique filename: book-<timestamp>.<ext>
+    const ext = path.extname(file.originalname);
+    cb(null, `book-${Date.now()}${ext}`);
+  }
+});
+const uploadBookImage = multer({ storage: bookStorage });
+
+// Make uploadBookImage available to routes via req
+app.use((req, res, next) => {
+  req.uploadBookImage = uploadBookImage;
+  next();
+});
+
+// ----------- Serve Uploaded Images -----------
+app.use(
+  '/uploads',
+  express.static(path.join(__dirname, '../uploads'))
+);
 
 // ----------- Route Mounting -----------
 app.use('/api/auth', require('./routes/auth.routes'));

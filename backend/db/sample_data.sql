@@ -8,7 +8,7 @@ INSERT INTO publishers (publisher_id, name, address) VALUES
 
 -- Users (seed)
 INSERT INTO users (id, name, email, password, role) VALUES
-(1, 'Admin One',  'admin1@example.com',  '$2a$10$dummyhash', 'admin'),
+(1, 'Admin One',  'admin@library.com',  '$2a$12$lYzh5mzfi15efQzLxQiiguOpFHyfOkn66/qBh7aQRYaX5mJ9S7Yre', 'admin'),
 (2, 'Reader Two', 'reader2@example.com', '$2a$10$dummyhash', 'reader'),
 (3, 'Staff Three','staff3@example.com',  '$2a$10$dummyhash', 'staff');
 
