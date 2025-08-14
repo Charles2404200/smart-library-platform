@@ -187,16 +187,6 @@ BEGIN
 END;
 
 /* -------------------------------------------------
-   RetireBook: remove a book record.
-   (FKs on checkout/review may block delete if rows exist; handle in app policy.)
--------------------------------------------------- */
-DROP PROCEDURE IF EXISTS RetireBook;
-CREATE PROCEDURE RetireBook(IN pBookId INT)
-BEGIN
-  DELETE FROM books WHERE book_id = pBookId;
-END;
-
-/* -------------------------------------------------
    LogStaffAction: append to staff_log.
 -------------------------------------------------- */
 DROP PROCEDURE IF EXISTS LogStaffAction;

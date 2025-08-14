@@ -17,7 +17,7 @@ router.get('/', async (req, res) => {
         p.name AS publisher,
         b.copies,
         b.available_copies,
-        b.image_url,                              -- 👈 add this
+        b.image_url,                         
         GROUP_CONCAT(a.name SEPARATOR ', ') AS authors
       FROM books b
       LEFT JOIN book_authors ba ON b.book_id = ba.book_id
