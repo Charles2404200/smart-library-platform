@@ -13,13 +13,18 @@
    Concurrency-safe via SELECT ... FOR UPDATE.
 -------------------------------------------------- */
 DROP PROCEDURE IF EXISTS BorrowBook;
-CREATE PROCEDURE BorrowBook(IN pUserId INT, IN pBookId INT)
+CREATE PROCEDURE BorrowBook(
+  IN pUserId   INT,
+  IN pBookId   INT,
+  IN pBorrowAt DATETIME,
+  IN pDueAt    DATETIME
+)
 BEGIN
   DECLARE vAvail INT;
 
   START TRANSACTION;
 
-  -- lock the book row to prevent race conditions
+  -- Lock row and fetch availability
   SELECT available_copies
     INTO vAvail
   FROM books
@@ -34,8 +39,9 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No copies available';
   END IF;
 
-  -- create checkout (checkoutAt has default NOW())
-  INSERT INTO checkout (userId, bookId) VALUES (pUserId, pBookId);
+  -- create checkout (use provided times)
+  INSERT INTO checkout (userId, bookId, checkoutAt, dueAt)
+  VALUES (pUserId, pBookId, pBorrowAt, pDueAt);
 
   -- decrement availability
   UPDATE books
@@ -48,6 +54,8 @@ BEGIN
   SELECT pBookId AS book_id,
          (SELECT available_copies FROM books WHERE book_id = pBookId) AS available_copies;
 END;
+
+
 
 /* -------------------------------------------------
    ReturnBook: sets returnAt/isLate, increments availability

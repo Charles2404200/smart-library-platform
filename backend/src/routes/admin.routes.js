@@ -405,4 +405,59 @@ router.get('/logs', verifyStaffOrAdmin, async (req, res) => {
   }
 });
 
+router.get('/users', verifyStaffOrAdmin, async (req, res) => {
+  const db = req.db;
+  try {
+    const [rows] = await db.query(
+      'SELECT id, name, email, role FROM users ORDER BY id ASC'
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('❌ Error fetching users:', err);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Change user role (no Prisma)
+router.patch('/users/:id/role', verifyStaffOrAdmin, async (req, res) => {
+  const db = req.db;
+  const { id } = req.params;
+  const { role } = req.body;
+
+  const allowed = new Set(['reader', 'staff', 'admin']);
+  if (!allowed.has(role)) {
+    return res.status(400).json({ error: 'Invalid role. Use reader/staff/admin' });
+  }
+
+  try {
+    const [result] = await db.execute(
+      'UPDATE users SET role = ? WHERE id = ?',
+      [role, id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Write staff log (stored proc, with safe fallback)
+    const action = `Changed role for user #${id} -> ${role}`;
+    try {
+      await db.query('CALL LogStaffAction(?, ?)', [req.user?.id || null, action]);
+    } catch (logErr) {
+      try {
+        await db.query(
+          'INSERT INTO staff_log (staffId, action, createdAt) VALUES (?, ?, NOW())',
+          [req.user?.id || null, action]
+        );
+      } catch (fallbackErr) {
+        console.error('❌ Failed to write staff log:', fallbackErr.message);
+      }
+    }
+
+    res.json({ id: Number(id), role });
+  } catch (err) {
+    console.error('❌ Update role error:', err);
+    res.status(500).json({ error: 'Failed to update role' });
+  }
+});
 module.exports = router;

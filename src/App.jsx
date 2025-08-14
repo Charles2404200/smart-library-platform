@@ -7,7 +7,7 @@ import RegisterPage from './pages/RegisterPage';
 import Navbar from './components/Navbar';
 import ViewBooksPage from './pages/ViewBooksPage';
 import AdminDashboard from './pages/AdminDashboard';
-
+import BorrowedBooks from './pages/BorrowedBooks';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -52,6 +52,7 @@ function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/books" element={<ViewBooksPage />} />
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/borrowed" element={<BorrowedBooks />} />
       </Routes>
     </Router>
   );

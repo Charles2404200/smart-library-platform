@@ -1,21 +1,33 @@
 const express = require('express');
 const router = express.Router();
-const authenticateJWT = require('../../middlewares/authMiddleware');
+const { authenticateJWT } = require('../../middlewares/authMiddleware');
+
 
 // -------------------- Borrow a Book --------------------
 router.post('/borrow', authenticateJWT, async (req, res) => {
-  const { bookId } = req.body;
+  const { bookId, borrowAt, dueAt } = req.body; // 👈 now accepting custom dates
   const userId = req.user?.id;
 
   if (!bookId || !userId) {
     return res.status(400).json({ error: 'Missing bookId or userId' });
   }
+  if (!borrowAt || !dueAt) {
+    return res.status(400).json({ error: 'Missing borrowAt or dueAt' });
+  }
+  if (new Date(dueAt) <= new Date(borrowAt)) {
+    return res.status(400).json({ error: 'dueAt must be after borrowAt' });
+  }
 
   const conn = await req.db.getConnection();
   try {
-    const [resultSets] = await conn.query('CALL BorrowBook(?, ?)', [userId, bookId]);
+    // use the new 4-arg procedure (see section 4)
+    const [resultSets] = await conn.query('CALL BorrowBook(?, ?, ?, ?)', [
+      userId,
+      bookId,
+      new Date(borrowAt), // MySQL DATETIME
+      new Date(dueAt),
+    ]);
 
-    // MySQL returns [[rows], meta, ...]. The last SELECT of the proc is in resultSets[0][0]
     const payload =
       Array.isArray(resultSets) && Array.isArray(resultSets[0]) && resultSets[0][0]
         ? resultSets[0][0]
@@ -32,6 +44,7 @@ router.post('/borrow', authenticateJWT, async (req, res) => {
     conn.release();
   }
 });
+
 
 router.post('/return', authenticateJWT, async (req, res) => {
   const { checkoutId } = req.body;
@@ -86,22 +99,27 @@ router.post('/return', authenticateJWT, async (req, res) => {
 // -------------------- View Borrowed Books --------------------
 // -------------------- View Borrowed Books --------------------
 router.get('/my-borrows', authenticateJWT, async (req, res) => {
-  const userId = req.user?.id;
-
+  const userId = req.user.id;
   const conn = await req.db.getConnection();
   try {
-    const [rows] = await conn.query(`
-      SELECT c.id as checkoutId, b.title, c.borrowDate, c.returnDate
-      FROM checkouts c
-      JOIN books b ON c.bookId = b.id
-      WHERE c.userId = ?
-      ORDER BY c.borrowDate DESC
-    `, [userId]);
-
-    res.status(200).json({ borrows: rows });
+    const [rows] = await conn.query(
+      `SELECT
+         c.id AS checkoutId,
+         b.title,
+         c.checkoutAt,
+         c.dueAt,
+         c.returnAt,
+         (c.returnAt IS NULL AND c.dueAt IS NOT NULL AND NOW() > c.dueAt) AS overdue
+       FROM checkout c
+       JOIN books b ON b.book_id = c.bookId
+       WHERE c.userId = ?
+       ORDER BY c.checkoutAt DESC`,
+      [userId]
+    );
+    res.json(rows);
   } catch (err) {
-    console.error('❌ Fetch borrow history error:', err.message);
-    res.status(500).json({ error: 'Internal server error while fetching borrows' });
+    console.error('❌ Get borrowed books error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     conn.release();
   }
