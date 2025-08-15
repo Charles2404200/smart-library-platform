@@ -109,3 +109,13 @@ WHERE b.publisher_id IS NOT NULL;
 
 -- Re-enable foreign key checks
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- One review per user per book
+ALTER TABLE review
+  ADD UNIQUE KEY uq_review_user_book (userId, bookId);
+
+-- Fast listing by book
+CREATE INDEX ix_review_book ON review (bookId, createdAt);
+
+-- Fast listing by user (if you plan to show "my reviews")
+CREATE INDEX ix_review_user ON review (userId, createdAt);

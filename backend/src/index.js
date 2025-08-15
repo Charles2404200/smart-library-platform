@@ -70,6 +70,7 @@ app.use('/api/borrow', require('./routes/borrow.routes'));
 app.use('/api/reviews', require('./routes/review.routes'));
 app.use('/api/analytics', require('./routes/analytics.routes'));
 app.use('/api/admin', require('./routes/admin.routes'));
+app.use('/api/review', require('./routes/review.routes'));
 
 /* ---------------- Health Check ---------------- */
 app.get('/', (_req, res) => res.send('📚 Smart Library Platform API is live!'));
