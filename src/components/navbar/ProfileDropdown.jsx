@@ -7,7 +7,6 @@ export default function ProfileDropdown({ onLogout }) {
   const dropdownRef = useRef();
   const navigate = useNavigate();
 
-  // Click outside to close
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -19,9 +18,9 @@ export default function ProfileDropdown({ onLogout }) {
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('token'); // Clear token
-    onLogout?.();                     // Optional callback
-    navigate('/login');               // Redirect
+    localStorage.removeItem('token');
+    onLogout?.();
+    navigate('/login');
   };
 
   return (
@@ -36,30 +35,10 @@ export default function ProfileDropdown({ onLogout }) {
       {open && (
         <div className="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-md bg-white border border-gray-200 shadow-lg">
           <div className="py-1">
-            <Link
-              to="/dashboard"
-              className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              Dashboard
-            </Link>
-            <Link
-              to="/books"
-              className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              View Books
-            </Link>
-            <Link
-              to="/borrowed"
-              className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              Books Borrowed
-            </Link>
-            <Link
-              to="/settings"
-              className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              Settings
-            </Link>
+            <Link to="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Dashboard</Link>
+            <Link to="/books" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">View Books</Link>
+            <Link to="/borrowed" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Books Borrowed</Link>
+            <Link to="/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Settings</Link>
             <button
               onClick={handleLogout}
               className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"

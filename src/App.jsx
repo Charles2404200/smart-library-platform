@@ -12,7 +12,7 @@ import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
 import BorrowedBooks from './pages/BorrowedBooks/BorrowedBooks';
 
 // Shared
-import Navbar from './components/Navbar';
+import Navbar from './components/navbar/Navbar';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);

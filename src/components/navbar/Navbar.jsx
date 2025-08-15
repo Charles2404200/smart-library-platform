@@ -1,32 +1,26 @@
-// src/components/Navbar.jsx
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaUserCircle } from 'react-icons/fa';
 import { HiOutlineMenu, HiOutlineX } from 'react-icons/hi';
-import CalendarWidget from './calendar/CalendarWidget';
+import CalendarWidget from '../calendar/CalendarWidget';
+import ProfileDropdown from './ProfileDropdown';
+import AdminPanelButton from './AdminPanelButton';
 
 export default function Navbar({ isAuthenticated, onLogout, user }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [term, setTerm] = useState('');
   const navigate = useNavigate();
 
   const toggleMenu = () => setIsOpen((v) => !v);
-  const toggleDropdown = () => setDropdownOpen((v) => !v);
-
-  const handleLogout = () => {
-    onLogout();
-    navigate('/login');
-  };
 
   const submitSearch = (e) => {
     e.preventDefault();
     const q = term.trim();
-    // go to /books with query param (ViewBooks will pick this up)
     if (q) navigate(`/books?q=${encodeURIComponent(q)}`);
     else navigate('/books');
-    setIsOpen(false); // close mobile menu after searching
+    setIsOpen(false);
   };
+
+  const isStaffOrAdmin = isAuthenticated && (user?.role === 'staff' || user?.role === 'admin');
 
   return (
     <nav className="bg-white border-b shadow-md">
@@ -57,38 +51,17 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
             </button>
           </form>
 
-          {isAuthenticated && (user?.role === 'staff' || user?.role === 'admin') && (
-            <Link to="/admin" className="text-gray-700 hover:text-indigo-700 transition">Admin Panel</Link>
-          )}
+          {/* Admin button (staff/admin) */}
+          <AdminPanelButton user={user} />
 
           {/* 📅 Calendar */}
           {isAuthenticated && (
             <CalendarWidget isAuthenticated={isAuthenticated} user={user} />
           )}
 
+          {/* Profile dropdown / auth links */}
           {isAuthenticated ? (
-            <div className="relative">
-              <button
-                onClick={toggleDropdown}
-                className="flex items-center text-indigo-700 focus:outline-none"
-              >
-                <FaUserCircle className="text-2xl" />
-              </button>
-              {dropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white border rounded shadow-lg z-50">
-                  <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Profile</Link>
-                  <Link to="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Dashboard</Link>
-                  <Link to="/borrowed" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Books Borrowed</Link>
-                  <Link to="/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Settings</Link>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
-                  >
-                    Logout
-                  </button>
-                </div>
-              )}
-            </div>
+            <ProfileDropdown onLogout={onLogout} />
           ) : (
             <>
               <Link to="/login" className="text-gray-600 hover:text-indigo-700">Login</Link>
@@ -127,7 +100,7 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
             </button>
           </form>
 
-          {isAuthenticated && (user?.role === 'staff' || user?.role === 'admin') && (
+          {isStaffOrAdmin && (
             <Link to="/admin" className="block text-gray-700 hover:text-indigo-700">Admin Panel</Link>
           )}
 
@@ -144,7 +117,7 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
               <Link to="/borrowed" className="block text-gray-700 hover:text-indigo-700">Books Borrowed</Link>
               <Link to="/settings" className="block text-gray-700 hover:text-indigo-700">Settings</Link>
               <button
-                onClick={handleLogout}
+                onClick={() => { onLogout?.(); navigate('/login'); }}
                 className="block w-full text-left text-red-600 hover:text-red-800"
               >
                 Logout

@@ -2,7 +2,8 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 export default function AdminPanelButton({ user, className = '' }) {
-  if (!user || user.role !== 'staff') return null;
+  const canSee = user && (user.role === 'staff' || user.role === 'admin');
+  if (!canSee) return null;
 
   return (
     <Link
