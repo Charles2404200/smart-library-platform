@@ -8,6 +8,7 @@ import CalendarWidget from './calendar/CalendarWidget';
 export default function Navbar({ isAuthenticated, onLogout, user }) {
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [term, setTerm] = useState('');
   const navigate = useNavigate();
 
   const toggleMenu = () => setIsOpen((v) => !v);
@@ -16,6 +17,15 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
   const handleLogout = () => {
     onLogout();
     navigate('/login');
+  };
+
+  const submitSearch = (e) => {
+    e.preventDefault();
+    const q = term.trim();
+    // go to /books with query param (ViewBooks will pick this up)
+    if (q) navigate(`/books?q=${encodeURIComponent(q)}`);
+    else navigate('/books');
+    setIsOpen(false); // close mobile menu after searching
   };
 
   return (
@@ -30,13 +40,28 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
         <div className="hidden md:flex items-center space-x-6">
           <Link to="/" className="text-gray-700 hover:text-indigo-700 transition">Home</Link>
           <Link to="/books" className="text-gray-700 hover:text-indigo-700 transition">View Books</Link>
-          <Link to="/search" className="text-gray-700 hover:text-indigo-700 transition">Search</Link>
+
+          {/* 🔎 Desktop search box */}
+          <form onSubmit={submitSearch} className="flex items-center">
+            <input
+              value={term}
+              onChange={(e) => setTerm(e.target.value)}
+              placeholder="Search title, author, genre…"
+              className="border rounded-l-md px-3 py-1.5 w-64"
+            />
+            <button
+              type="submit"
+              className="px-3 py-1.5 bg-indigo-600 text-white rounded-r-md hover:bg-indigo-700"
+            >
+              Search
+            </button>
+          </form>
 
           {isAuthenticated && (user?.role === 'staff' || user?.role === 'admin') && (
             <Link to="/admin" className="text-gray-700 hover:text-indigo-700 transition">Admin Panel</Link>
           )}
 
-          {/* 📅 Calendar (real-time due reminders) */}
+          {/* 📅 Calendar */}
           {isAuthenticated && (
             <CalendarWidget isAuthenticated={isAuthenticated} user={user} />
           )}
@@ -82,16 +107,30 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
 
       {/* Mobile Menu */}
       {isOpen && (
-        <div className="md:hidden px-4 pb-4 space-y-2">
+        <div className="md:hidden px-4 pb-4 space-y-3">
           <Link to="/" className="block text-gray-700 hover:text-indigo-700">Home</Link>
           <Link to="/books" className="block text-gray-700 hover:text-indigo-700">View Books</Link>
-          <Link to="/search" className="block text-gray-700 hover:text-indigo-700">Search</Link>
+
+          {/* 🔎 Mobile search box */}
+          <form onSubmit={submitSearch} className="flex items-center">
+            <input
+              value={term}
+              onChange={(e) => setTerm(e.target.value)}
+              placeholder="Search…"
+              className="flex-1 border rounded-l-md px-3 py-2"
+            />
+            <button
+              type="submit"
+              className="px-3 py-2 bg-indigo-600 text-white rounded-r-md hover:bg-indigo-700"
+            >
+              Go
+            </button>
+          </form>
 
           {isAuthenticated && (user?.role === 'staff' || user?.role === 'admin') && (
             <Link to="/admin" className="block text-gray-700 hover:text-indigo-700">Admin Panel</Link>
           )}
 
-          {/* Mobile: link to the borrowed page (popover is desktop-first) */}
           {isAuthenticated && (
             <Link to="/borrowed" className="block text-gray-700 hover:text-indigo-700">
               📅 Due Dates & Borrowed

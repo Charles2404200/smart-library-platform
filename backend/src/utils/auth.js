@@ -6,7 +6,7 @@ export const getCurrentUserFromToken = () => {
   if (!token) return null;
 
   try {
-    const decoded = jwt_decode(token); // chứa { id, email, role }
+    const decoded = jwt_decode(token); // contain { id, email, role }
     return decoded;
   } catch (error) {
     console.error("Invalid token:", error);

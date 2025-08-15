@@ -1,8 +1,9 @@
 // src/pages/ViewBooks/ViewBooks.jsx
 import React, { useEffect, useMemo, useState } from 'react';
-import { getBooks } from '../../services/booksService';
+import { useSearchParams } from 'react-router-dom';
+import { getBooks, searchBooks as searchBooksAPI } from '../../services/booksService';
 import { borrowBook } from '../../services/borrowService';
-import { ReviewsAPI } from '../../services/reviews'; // ⭐ add
+import { ReviewsAPI } from '../../services/reviews';
 import BooksGrid from '../../components/books/BooksGrid';
 import BorrowModal from '../../components/books/BorrowModal';
 import ReviewsModal from '../../components/reviews/ReviewsModal';
@@ -11,7 +12,9 @@ import { API_URL } from '../../config/env';
 export default function ViewBooksPage() {
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [borrowStatus, setBorrowStatus] = useState(null);
+  const [searchParams] = useSearchParams();
 
   // Borrow modal state
   const [borrowModalOpen, setBorrowModalOpen] = useState(false);
@@ -51,19 +54,15 @@ export default function ViewBooksPage() {
 
   // ---- fetch aggregate for books missing it (FE fallback)
   async function hydrateAggregates(list) {
-    // pick books that look like "no data yet"
     const targets = list.filter(b => (b.avg_rating === 0 && b.reviews_count === 0));
-
     if (targets.length === 0) return;
 
-    // limit concurrency to avoid flooding
     const chunkSize = 6;
     for (let i = 0; i < targets.length; i += chunkSize) {
       const slice = targets.slice(i, i + chunkSize);
       const results = await Promise.allSettled(
         slice.map(b => ReviewsAPI.list(b.id ?? b.book_id))
       );
-      // merge into state
       setBooks(prev => {
         const map = new Map(prev.map(x => [Number(x.id ?? x.book_id), { ...x }]));
         slice.forEach((b, idx) => {
@@ -83,7 +82,7 @@ export default function ViewBooksPage() {
     }
   }
 
-  // ---- load books
+  // ---- load all books
   async function loadBooks(withHydrate = true) {
     setLoading(true);
     try {
@@ -91,10 +90,7 @@ export default function ViewBooksPage() {
       const rows = Array.isArray(data) ? data : data.books || [];
       const normalized = rows.map(normalizeBook);
       setBooks(normalized);
-      // ⭐ If backend doesn't send aggregates, fetch them client-side
-      if (withHydrate) {
-        hydrateAggregates(normalized);
-      }
+      if (withHydrate) hydrateAggregates(normalized);
     } catch (err) {
       console.error('❌ Error fetching books:', err);
     } finally {
@@ -102,7 +98,39 @@ export default function ViewBooksPage() {
     }
   }
 
+  // initial load (no query)
   useEffect(() => { loadBooks(true); }, []);
+
+  // ⭐ react to ?q=... from Navbar
+  useEffect(() => {
+    const q = (searchParams.get('q') || '').trim();
+
+    if (q.length < 1) {
+      loadBooks(true);
+      return;
+    }
+
+    let alive = true;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const data = await searchBooksAPI({ q, page: 1, pageSize: 24, sort: 'relevance' });
+        const rows = Array.isArray(data) ? data : data.books || [];
+        if (!alive) return;
+        const normalized = rows.map(normalizeBook);
+        setBooks(normalized);
+        hydrateAggregates(normalized);
+      } catch (e) {
+        console.error('❌ search error:', e);
+        if (alive) loadBooks(true);
+      } finally {
+        if (alive) setSearching(false);
+      }
+    }, 250);
+
+    return () => { alive = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // open borrow modal
   const openBorrowModal = (book) => {
@@ -173,7 +201,21 @@ export default function ViewBooksPage() {
 
       setTimeout(() => {
         closeBorrowModal();
-        loadBooks(true); // sync final & re-hydrate if needed
+        // refresh respecting current query
+        const q = (searchParams.get('q') || '').trim();
+        if (q.length >= 1) {
+          (async () => {
+            try {
+              const data = await searchBooksAPI({ q, page: 1, pageSize: 24, sort: 'relevance' });
+              const rows = Array.isArray(data) ? data : data.books || [];
+              setBooks(rows.map(normalizeBook));
+            } catch {
+              loadBooks(true);
+            }
+          })();
+        } else {
+          loadBooks(true);
+        }
       }, 600);
     } catch (err) {
       setBorrowStatus(`❌ Failed to borrow: ${err.message || 'Unknown error'}`);
@@ -190,10 +232,23 @@ export default function ViewBooksPage() {
     setReviewBook(null);
   };
 
-  // When reviews modal closes, refresh once to ensure aggregates are up to date
+  // Refresh once after closing reviews modal to ensure aggregates are up to date
   useEffect(() => {
     if (!reviewOpen && reviewBook) {
-      loadBooks(true);
+      const q = (searchParams.get('q') || '').trim();
+      if (q.length >= 1) {
+        (async () => {
+          try {
+            const data = await searchBooksAPI({ q, page: 1, pageSize: 24, sort: 'relevance' });
+            const rows = Array.isArray(data) ? data : data.books || [];
+            setBooks(rows.map(normalizeBook));
+          } catch {
+            loadBooks(true);
+          }
+        })();
+      } else {
+        loadBooks(true);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reviewOpen]);
@@ -222,7 +277,7 @@ export default function ViewBooksPage() {
 
       <BooksGrid
         books={books}
-        loading={loading}
+        loading={loading || searching}
         onBorrow={openBorrowModal}
         onReviews={openReviews}
       />
@@ -245,7 +300,7 @@ export default function ViewBooksPage() {
         book={reviewBook}
         isAuthenticated={isAuthenticated}
         currentUser={currentUser}
-        onAggregates={handleAggregates} // ⭐ live update stars/count
+        onAggregates={handleAggregates}
       />
     </div>
   );
