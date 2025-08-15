@@ -1,15 +1,17 @@
+// src/components/Navbar.jsx
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FaUserCircle } from 'react-icons/fa';
 import { HiOutlineMenu, HiOutlineX } from 'react-icons/hi';
+import CalendarWidget from './calendar/CalendarWidget';
 
 export default function Navbar({ isAuthenticated, onLogout, user }) {
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const navigate = useNavigate();
 
-  const toggleMenu = () => setIsOpen(!isOpen);
-  const toggleDropdown = () => setDropdownOpen(!dropdownOpen);
+  const toggleMenu = () => setIsOpen((v) => !v);
+  const toggleDropdown = () => setDropdownOpen((v) => !v);
 
   const handleLogout = () => {
     onLogout();
@@ -34,9 +36,17 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
             <Link to="/admin" className="text-gray-700 hover:text-indigo-700 transition">Admin Panel</Link>
           )}
 
+          {/* 📅 Calendar (real-time due reminders) */}
+          {isAuthenticated && (
+            <CalendarWidget isAuthenticated={isAuthenticated} user={user} />
+          )}
+
           {isAuthenticated ? (
             <div className="relative">
-              <button onClick={toggleDropdown} className="flex items-center text-indigo-700 focus:outline-none">
+              <button
+                onClick={toggleDropdown}
+                className="flex items-center text-indigo-700 focus:outline-none"
+              >
                 <FaUserCircle className="text-2xl" />
               </button>
               {dropdownOpen && (
@@ -79,6 +89,13 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
 
           {isAuthenticated && (user?.role === 'staff' || user?.role === 'admin') && (
             <Link to="/admin" className="block text-gray-700 hover:text-indigo-700">Admin Panel</Link>
+          )}
+
+          {/* Mobile: link to the borrowed page (popover is desktop-first) */}
+          {isAuthenticated && (
+            <Link to="/borrowed" className="block text-gray-700 hover:text-indigo-700">
+              📅 Due Dates & Borrowed
+            </Link>
           )}
 
           {isAuthenticated ? (

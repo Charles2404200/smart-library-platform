@@ -1,122 +1,248 @@
--- =======================
+-- ============================================
 -- Stored Procedures for Smart Library
--- =======================
+-- Schema tables used:
+--   books(book_id, title, genre, publisher_id, copies, available_copies)
+--   checkout(id, userId, bookId, checkoutAt, returnAt, isLate)
+--   review(id, userId, bookId, rating, comment, createdAt)
+--   staff_log(id, staffId, action, createdAt)
+-- ============================================
 
---  Procedure: BorrowBook
-USE smartlibrary_db;
+/* -------------------------------------------------
+   BorrowBook: creates a checkout, decrements availability,
+   and returns the fresh availability for the book.
+   Concurrency-safe via SELECT ... FOR UPDATE.
+-------------------------------------------------- */
 DROP PROCEDURE IF EXISTS BorrowBook;
-DELIMITER //
-CREATE PROCEDURE BorrowBook(IN userId INT, IN bookId INT)
+CREATE PROCEDURE BorrowBook(
+  IN pUserId   INT,
+  IN pBookId   INT,
+  IN pBorrowAt DATETIME,
+  IN pDueAt    DATETIME
+)
 BEGIN
-  DECLARE currentCopies INT;
+  DECLARE vAvail INT;
 
-  -- Check availability
-  SELECT copies INTO currentCopies FROM Book WHERE id = bookId;
+  START TRANSACTION;
 
-  IF currentCopies <= 0 THEN
+  -- Lock row and fetch availability
+  SELECT available_copies
+    INTO vAvail
+  FROM books
+  WHERE book_id = pBookId
+  FOR UPDATE;
+
+  IF vAvail IS NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Book not found';
+  END IF;
+
+  IF vAvail <= 0 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No copies available';
   END IF;
 
-  -- Update inventory and insert checkout
-  UPDATE Book SET copies = copies - 1 WHERE id = bookId;
-  INSERT INTO Checkout (userId, bookId, checkoutAt) VALUES (userId, bookId, NOW());
+  -- create checkout (use provided times)
+  INSERT INTO checkout (userId, bookId, checkoutAt, dueAt)
+  VALUES (pUserId, pBookId, pBorrowAt, pDueAt);
+
+  -- decrement availability
+  UPDATE books
+  SET available_copies = available_copies - 1
+  WHERE book_id = pBookId;
+
+  COMMIT;
+
+  -- return updated availability
+  SELECT pBookId AS book_id,
+         (SELECT available_copies FROM books WHERE book_id = pBookId) AS available_copies;
 END;
-//
-DELIMITER ;
 
 
--- 🔄 Procedure: ReturnBook
+
+/* -------------------------------------------------
+   ReturnBook: sets returnAt/isLate, increments availability
+   (capped at total copies), and returns fresh availability.
+   Concurrency-safe via SELECT ... FOR UPDATE.
+-------------------------------------------------- */
 DROP PROCEDURE IF EXISTS ReturnBook;
-DELIMITER //
-CREATE PROCEDURE ReturnBook(IN checkoutId INT)
+CREATE PROCEDURE ReturnBook(IN pCheckoutId INT)
 BEGIN
-  DECLARE bId INT;
-  DECLARE isLate BOOLEAN;
+  DECLARE vBookId INT;
+  DECLARE vCheckoutAt DATETIME;
+  DECLARE vReturnAt DATETIME;
+  DECLARE vIsLate BOOLEAN;
+  DECLARE vGraceDays INT DEFAULT 14;
 
-  SELECT bookId INTO bId FROM Checkout WHERE id = checkoutId;
+  START TRANSACTION;
 
-  -- Check if overdue (after 14 days)
-  SET isLate = (SELECT returnAt IS NULL AND NOW() > DATE_ADD(checkoutAt, INTERVAL 14 DAY) FROM Checkout WHERE id = checkoutId);
+  -- lock the checkout row
+  SELECT bookId, checkoutAt, returnAt
+    INTO vBookId, vCheckoutAt, vReturnAt
+  FROM checkout
+  WHERE id = pCheckoutId
+  FOR UPDATE;
 
-  UPDATE Checkout
-  SET returnAt = NOW(), isLate = isLate
-  WHERE id = checkoutId;
+  IF vBookId IS NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Checkout not found';
+  END IF;
 
-  UPDATE Book SET copies = copies + 1 WHERE id = bId;
+  IF vReturnAt IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Already returned';
+  END IF;
+
+  -- simple lateness policy
+  SET vIsLate = TIMESTAMPDIFF(DAY, vCheckoutAt, NOW()) > vGraceDays;
+
+  UPDATE checkout
+  SET returnAt = NOW(),
+      isLate  = vIsLate
+  WHERE id = pCheckoutId;
+
+  -- bump availability but never over total copies
+  UPDATE books
+  SET available_copies = LEAST(copies, available_copies + 1)
+  WHERE book_id = vBookId;
+
+  COMMIT;
+
+  -- return updated availability + lateness flag
+  SELECT vBookId AS book_id,
+         (SELECT available_copies FROM books WHERE book_id = vBookId) AS available_copies,
+         vIsLate AS isLate;
 END;
-//
-DELIMITER ;
 
-
--- ✍️ Procedure: AddBookReview
+/* -------------------------------------------------
+   AddBookReview: insert a user review.
+-------------------------------------------------- */
 DROP PROCEDURE IF EXISTS AddBookReview;
-DELIMITER //
 CREATE PROCEDURE AddBookReview(
-  IN userId INT,
-  IN bookId INT,
-  IN rating INT,
-  IN comment TEXT
+  IN pUserId INT,
+  IN pBookId INT,
+  IN pRating INT,
+  IN pComment TEXT
 )
 BEGIN
-  INSERT INTO Review (userId, bookId, rating, comment, createdAt)
-  VALUES (userId, bookId, rating, comment, NOW());
+  INSERT INTO review (userId, bookId, rating, comment, createdAt)
+  VALUES (pUserId, pBookId, pRating, pComment, NOW());
 END;
-//
-DELIMITER ;
 
-
--- Procedure: AddBook
+/* -------------------------------------------------
+   AddBook: insert a new book. Because your schema defines
+   books.book_id as a plain INT (no AUTO_INCREMENT), we accept it.
+   available_copies starts equal to copies.
+-------------------------------------------------- */
 DROP PROCEDURE IF EXISTS AddBook;
-DELIMITER //
 CREATE PROCEDURE AddBook(
-  IN title VARCHAR(255),
-  IN genre VARCHAR(255),
-  IN publisher VARCHAR(255),
-  IN copies INT
+  IN pBookId INT,
+  IN pTitle VARCHAR(255),
+  IN pGenre VARCHAR(100),
+  IN pPublisherId INT,
+  IN pCopies INT
 )
 BEGIN
-  INSERT INTO Book (title, genre, publisher, copies)
-  VALUES (title, genre, publisher, copies);
+  -- Prevent duplicate IDs
+  IF EXISTS (SELECT 1 FROM books WHERE book_id = pBookId) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Book ID already exists';
+  END IF;
+
+  -- Insert with available_copies = copies at start
+  INSERT INTO books (book_id, title, genre, publisher_id, copies, available_copies)
+  VALUES (pBookId, pTitle, pGenre, pPublisherId, pCopies, pCopies);
 END;
-//
-DELIMITER ;
 
 
---  Procedure: UpdateBookInventory
+/* -------------------------------------------------
+   UpdateBookInventory: admin sets total copies.
+   Preserve the number currently borrowed and recompute availability:
+     borrowed = old_copies - old_available
+     new_available = GREATEST(0, pNewCopies - borrowed)
+-------------------------------------------------- */
 DROP PROCEDURE IF EXISTS UpdateBookInventory;
-DELIMITER //
 CREATE PROCEDURE UpdateBookInventory(
-  IN bookId INT,
-  IN newCopies INT
+  IN pBookId INT,
+  IN pNewCopies INT
 )
 BEGIN
-  UPDATE Book SET copies = newCopies WHERE id = bookId;
+  DECLARE vOldCopies INT;
+  DECLARE vOldAvail INT;
+  DECLARE vBorrowed  INT;
+  DECLARE vNewAvail  INT;
+
+  START TRANSACTION;
+
+  SELECT copies, available_copies
+    INTO vOldCopies, vOldAvail
+  FROM books
+  WHERE book_id = pBookId
+  FOR UPDATE;
+
+  IF vOldCopies IS NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Book not found';
+  END IF;
+
+  SET vBorrowed = GREATEST(0, vOldCopies - vOldAvail);
+  SET vNewAvail = GREATEST(0, pNewCopies - vBorrowed);
+
+  UPDATE books
+  SET copies = pNewCopies,
+      available_copies = vNewAvail
+  WHERE book_id = pBookId;
+
+  COMMIT;
+
+  -- return updated stock numbers
+  SELECT pBookId AS book_id,
+         pNewCopies AS copies,
+         vNewAvail AS available_copies;
 END;
-//
-DELIMITER ;
 
-
---  Procedure: RetireBook
-DROP PROCEDURE IF EXISTS RetireBook;
-DELIMITER //
-CREATE PROCEDURE RetireBook(IN bookId INT)
-BEGIN
-  DELETE FROM Book WHERE id = bookId;
-END;
-//
-DELIMITER ;
-
-
---  Procedure: LogStaffAction
+/* -------------------------------------------------
+   LogStaffAction: append to staff_log.
+-------------------------------------------------- */
 DROP PROCEDURE IF EXISTS LogStaffAction;
-DELIMITER //
-CREATE PROCEDURE LogStaffAction(
-  IN staffId INT,
-  IN action TEXT
+CREATE PROCEDURE LogStaffAction(IN pStaffId INT, IN pAction TEXT)
+BEGIN
+  INSERT INTO staff_log (staffId, action, createdAt)
+  VALUES (pStaffId, pAction, NOW());
+END;
+
+
+DROP PROCEDURE IF EXISTS UpdateBookAvailable;
+CREATE PROCEDURE UpdateBookAvailable(
+  IN pBookId INT,
+  IN pNewAvailable INT
 )
 BEGIN
-  INSERT INTO StaffLog (staffId, action, createdAt)
-  VALUES (staffId, action, NOW());
+  DECLARE vCopies INT;
+  DECLARE vAvail INT;
+  DECLARE vBorrowed INT;
+  DECLARE vAdjAvail INT;
+
+  START TRANSACTION;
+
+  SELECT copies, available_copies
+    INTO vCopies, vAvail
+  FROM books
+  WHERE book_id = pBookId
+  FOR UPDATE;
+
+  IF vCopies IS NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Book not found';
+  END IF;
+
+  -- how many are currently out
+  SET vBorrowed = GREATEST(0, vCopies - vAvail);
+
+  -- clamp requested available to >= 0
+  SET vAdjAvail = GREATEST(0, pNewAvailable);
+
+  -- keep borrowed constant; adjust total copies to borrowed + new available
+  UPDATE books
+  SET copies = vBorrowed + vAdjAvail,
+      available_copies = vAdjAvail
+  WHERE book_id = pBookId;
+
+  COMMIT;
+
+  SELECT pBookId AS book_id,
+         (vBorrowed + vAdjAvail) AS copies,
+         vAdjAvail AS available_copies;
 END;
-//
-DELIMITER ;

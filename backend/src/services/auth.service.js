@@ -1,56 +1,50 @@
+// src/services/auth.service.js
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 
-const registerUser = async (db, { name, email, password, role }) => {
-  // Check if email already exists
-  const [existing] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
-  if (existing.length > 0) throw new Error('Email already in use');
+/** Whitelist vai trò hợp lệ */
+const ALLOWED_ROLES = new Set(['reader', 'staff', 'admin']);
 
-  // Hash password
-  const hashedPassword = await bcrypt.hash(password, 10);
+function normalizeRole(role) {
+  const r = String(role || '').toLowerCase();
+  return ALLOWED_ROLES.has(r) ? r : 'reader';
+}
 
-  // Insert new user
-  const [result] = await db.query(
+async function getUserByEmail(conn, email) {
+  const [rows] = await conn.query('SELECT * FROM users WHERE email = ? LIMIT 1', [email]);
+  return rows[0] || null;
+}
+
+async function createUser(conn, { name, email, password, role = 'reader' }) {
+  const hashed = await bcrypt.hash(password, 10);
+  const safeRole = normalizeRole(role);
+
+  const [result] = await conn.query(
     'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
-    [name, email, hashedPassword, role]
+    [name, email, hashed, safeRole]
   );
 
   return {
     id: result.insertId,
     name,
     email,
-    role,
+    role: safeRole,
   };
+}
+
+async function emailExists(conn, email) {
+  const [rows] = await conn.query('SELECT 1 FROM users WHERE email = ? LIMIT 1', [email]);
+  return rows.length > 0;
+}
+
+async function comparePassword(plain, hashed) {
+  return bcrypt.compare(plain, hashed);
+}
+
+module.exports = {
+  getUserByEmail,
+  createUser,
+  emailExists,
+  comparePassword,
+  normalizeRole,
+  ALLOWED_ROLES,
 };
-
-const loginUser = async (db, { email, password }) => {
-  // Fetch user
-  const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
-  if (rows.length === 0) throw new Error('Invalid credentials');
-
-  const user = rows[0];
-
-  // Check password
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) throw new Error('Invalid credentials');
-
-  // Create token
-  const token = jwt.sign(
-    { userId: user.id, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: '1h' }
-  );
-
-  // Return user info (without password)
-  return {
-    token,
-    user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-    },
-  };
-};
-
-module.exports = { registerUser, loginUser };

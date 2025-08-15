@@ -41,7 +41,7 @@ BEGIN
   FROM Review
   WHERE bookId = NEW.bookId;
 
-  -- BLưu `avgRating` này vào một cột riêng nếu muốn
+  -- Lưu `avgRating` này vào một cột riêng nếu muốn
 END;
 //
 DELIMITER ;
