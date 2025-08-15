@@ -5,6 +5,7 @@ import { FaUserCircle } from 'react-icons/fa';
 import { HiOutlineMenu, HiOutlineX } from 'react-icons/hi';
 import CalendarWidget from './calendar/CalendarWidget';
 
+
 export default function Navbar({ isAuthenticated, onLogout, user }) {
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
