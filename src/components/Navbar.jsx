@@ -1,16 +1,17 @@
+// src/components/Navbar.jsx
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FaUserCircle } from 'react-icons/fa';
 import { HiOutlineMenu, HiOutlineX } from 'react-icons/hi';
-import Calendar from './Calendar';
+import CalendarWidget from './calendar/CalendarWidget';
 
 export default function Navbar({ isAuthenticated, onLogout, user }) {
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const navigate = useNavigate();
 
-  const toggleMenu = () => setIsOpen(!isOpen);
-  const toggleDropdown = () => setDropdownOpen(!dropdownOpen);
+  const toggleMenu = () => setIsOpen((v) => !v);
+  const toggleDropdown = () => setDropdownOpen((v) => !v);
 
   const handleLogout = () => {
     onLogout();
@@ -37,12 +38,15 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
 
           {/* 📅 Calendar (real-time due reminders) */}
           {isAuthenticated && (
-            <Calendar isAuthenticated={isAuthenticated} user={user} />
+            <CalendarWidget isAuthenticated={isAuthenticated} user={user} />
           )}
 
           {isAuthenticated ? (
             <div className="relative">
-              <button onClick={toggleDropdown} className="flex items-center text-indigo-700 focus:outline-none">
+              <button
+                onClick={toggleDropdown}
+                className="flex items-center text-indigo-700 focus:outline-none"
+              >
                 <FaUserCircle className="text-2xl" />
               </button>
               {dropdownOpen && (
