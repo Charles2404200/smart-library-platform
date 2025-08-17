@@ -10,7 +10,15 @@ const db = mysql.createPool({
   database: process.env.DB_NAME || 'smart_library',
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+
+  timezone: 'Z',        // send/receive in UTC
+  dateStrings: true,    // return DATETIME/TIMESTAMP as "YYYY-MM-DD HH:MM:SS"
+});
+
+// Ensure each new connection runs with UTC session time_zone too
+db.on?.('connection', (conn) => {
+  conn.query("SET time_zone = '+00:00'");
 });
 
 module.exports = (req, res, next) => {
