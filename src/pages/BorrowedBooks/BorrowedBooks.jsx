@@ -4,9 +4,13 @@ import BorrowSummary from '../../components/borrow/BorrowSummary';
 import ActiveBorrowsList from '../../components/borrow/ActiveBorrowsList';
 import ReturnHistoryTable from '../../components/borrow/ReturnHistoryTable';
 import { storage } from '../../utils/storage';
-
-// Optional real-time refresh via Socket.IO
 import { io } from 'socket.io-client';
+
+function parseUtc(d) {
+  if (!d) return null;
+  const iso = d.includes('T') ? d : d.replace(' ', 'T');
+  return new Date(iso.endsWith('Z') ? iso : `${iso}Z`);
+}
 
 export default function BorrowedBooks() {
   const [borrows, setBorrows] = useState([]);
@@ -66,9 +70,18 @@ export default function BorrowedBooks() {
   const returned = useMemo(() => borrows.filter(b => !!b.returnAt), [borrows]);
 
   function computeOverdue(row) {
-    if (row.overdue !== undefined && row.overdue !== null) return !!Number(row.overdue);
-    if (!row.dueAt || row.returnAt) return false;
-    return Date.now() > new Date(row.dueAt).getTime();
+    // trust server flag if present
+    const serverOverdue =
+      row.overdue === true ||
+      row.overdue === 1 ||
+      row.overdue === '1';
+
+    // fallback: compare dueAt vs now using UTC parsing
+    const due = parseUtc(row.dueAt);
+    const notReturned = !row.returnAt;
+    const clientOverdue = !!due && notReturned && Date.now() > due.getTime();
+
+    return serverOverdue || clientOverdue;
   }
 
   async function handleReturn(checkoutId) {
@@ -77,7 +90,7 @@ export default function BorrowedBooks() {
       await returnBook(checkoutId);
 
       setActionMsg('✅ Book returned successfully.');
-      // Optimistic update
+      // Optimistic: only stamp returnAt; let server compute isLate, then reload
       setBorrows(prev =>
         prev.map(b =>
           (b.checkoutId === checkoutId || b.id === checkoutId)
@@ -85,8 +98,7 @@ export default function BorrowedBooks() {
             : b
         )
       );
-      // Hard refresh to sync flags
-      load();
+      load(); // sync flags (isLate) from backend
     } catch (e) {
       setActionMsg(`❌ ${e.message || 'Return failed'}`);
     }

@@ -85,11 +85,26 @@ const server = http.createServer(app);
 
 // Attach Socket.IO
 const io = new Server(server, {
+  path: '/socket.io',                                 // ← ADDED (explicit path)
   cors: {
     origin: ['http://localhost:5173', 'http://localhost:3000'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Authorization', 'Content-Type'],
+    credentials: true,                                // ← ADDED (cookies/auth)
   },
+  transports: ['websocket', 'polling'],               // ← ADDED (allow fallback)
+  allowEIO3: false,                                    // ← ADDED (ensure v4)
+  pingTimeout: 20000,                                  // ← ADDED (stability)
+  pingInterval: 25000,                                 // ← ADDED (stability)
+});
+
+// Helpful diagnostics for handshake issues
+io.engine.on('connection_error', (err) => {            // ← ADDED
+  console.error('🚨 Socket.IO connection_error:', {
+    code: err.code,
+    message: err.message,
+    context: err.context,
+  });
 });
 
 // Expose io to routes: req.app.get('io')

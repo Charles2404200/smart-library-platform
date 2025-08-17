@@ -1,9 +1,9 @@
 -- ============================================
--- Stored Procedures for Smart Library
--- Schema tables used:
+-- Stored Procedures for Smart Library (MySQL 5.7+)
+-- Tables used:
 --   books(book_id, title, genre, publisher_id, copies, available_copies)
---   checkout(id, userId, bookId, checkoutAt, returnAt, isLate)
---   review(id, userId, bookId, rating, comment, createdAt)
+--   checkout(id, userId, bookId, checkoutAt, dueAt, returnAt, isLate)
+--   review(review_id, userId, bookId, rating, comment, createdAt)
 --   staff_log(id, staffId, action, createdAt)
 -- ============================================
 
@@ -39,43 +39,44 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No copies available';
   END IF;
 
-  -- create checkout (use provided times)
+  -- Create checkout (use provided times)
   INSERT INTO checkout (userId, bookId, checkoutAt, dueAt)
   VALUES (pUserId, pBookId, pBorrowAt, pDueAt);
 
-  -- decrement availability
+  -- Decrement availability
   UPDATE books
   SET available_copies = available_copies - 1
   WHERE book_id = pBookId;
 
   COMMIT;
 
-  -- return updated availability
+  -- Return updated availability
   SELECT pBookId AS book_id,
          (SELECT available_copies FROM books WHERE book_id = pBookId) AS available_copies;
 END;
 
-
-
 /* -------------------------------------------------
    ReturnBook: sets returnAt/isLate, increments availability
    (capped at total copies), and returns fresh availability.
+   Late rule (UTC):
+     - if dueAt IS NOT NULL → late when UTC_TIMESTAMP() > dueAt
+     - else fallback to 14 days since checkoutAt
    Concurrency-safe via SELECT ... FOR UPDATE.
 -------------------------------------------------- */
 DROP PROCEDURE IF EXISTS ReturnBook;
 CREATE PROCEDURE ReturnBook(IN pCheckoutId INT)
 BEGIN
-  DECLARE vBookId INT;
+  DECLARE vBookId     INT;
   DECLARE vCheckoutAt DATETIME;
-  DECLARE vReturnAt DATETIME;
-  DECLARE vIsLate BOOLEAN;
-  DECLARE vGraceDays INT DEFAULT 14;
+  DECLARE vDueAt      DATETIME;
+  DECLARE vReturnAt   DATETIME;
+  DECLARE vIsLate     BOOLEAN;
 
   START TRANSACTION;
 
-  -- lock the checkout row
-  SELECT bookId, checkoutAt, returnAt
-    INTO vBookId, vCheckoutAt, vReturnAt
+  -- Lock the checkout row and read dueAt
+  SELECT bookId, checkoutAt, dueAt, returnAt
+    INTO vBookId, vCheckoutAt, vDueAt, vReturnAt
   FROM checkout
   WHERE id = pCheckoutId
   FOR UPDATE;
@@ -88,22 +89,27 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Already returned';
   END IF;
 
-  -- simple lateness policy
-  SET vIsLate = TIMESTAMPDIFF(DAY, vCheckoutAt, NOW()) > vGraceDays;
+  -- Lateness policy
+  IF vDueAt IS NOT NULL THEN
+    SET vIsLate = (UTC_TIMESTAMP() > vDueAt);
+  ELSE
+    SET vIsLate = (TIMESTAMPDIFF(DAY, vCheckoutAt, UTC_TIMESTAMP()) > 14);
+  END IF;
 
+  -- Update the checkout as returned (UTC)
   UPDATE checkout
-  SET returnAt = NOW(),
-      isLate  = vIsLate
+  SET returnAt = UTC_TIMESTAMP(),
+      isLate   = vIsLate
   WHERE id = pCheckoutId;
 
-  -- bump availability but never over total copies
+  -- Bump availability but never over total copies
   UPDATE books
   SET available_copies = LEAST(copies, available_copies + 1)
   WHERE book_id = vBookId;
 
   COMMIT;
 
-  -- return updated availability + lateness flag
+  -- Return updated availability + lateness flag
   SELECT vBookId AS book_id,
          (SELECT available_copies FROM books WHERE book_id = vBookId) AS available_copies,
          vIsLate AS isLate;
@@ -125,29 +131,37 @@ BEGIN
 END;
 
 /* -------------------------------------------------
-   AddBook: insert a new book. Because your schema defines
-   books.book_id as a plain INT (no AUTO_INCREMENT), we accept it.
+   AddBook: insert a new book. Because schema defines
+   books.book_id as AUTO_INCREMENT, we accept pBookId as NULL for auto-id.
    available_copies starts equal to copies.
 -------------------------------------------------- */
 DROP PROCEDURE IF EXISTS AddBook;
 CREATE PROCEDURE AddBook(
-  IN pBookId INT,
+  IN pBookId INT,             -- pass NULL to auto-generate
   IN pTitle VARCHAR(255),
   IN pGenre VARCHAR(100),
   IN pPublisherId INT,
   IN pCopies INT
 )
 BEGIN
-  -- Prevent duplicate IDs
-  IF EXISTS (SELECT 1 FROM books WHERE book_id = pBookId) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Book ID already exists';
+  IF pBookId IS NULL THEN
+    INSERT INTO books (title, genre, publisher_id, copies, available_copies)
+    VALUES (pTitle, pGenre, pPublisherId, pCopies, pCopies);
+  ELSE
+    -- Prevent duplicate IDs if caller supplies a custom id
+    IF EXISTS (SELECT 1 FROM books WHERE book_id = pBookId) THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Book ID already exists';
+    END IF;
+
+    INSERT INTO books (book_id, title, genre, publisher_id, copies, available_copies)
+    VALUES (pBookId, pTitle, pGenre, pPublisherId, pCopies, pCopies);
   END IF;
 
-  -- Insert with available_copies = copies at start
-  INSERT INTO books (book_id, title, genre, publisher_id, copies, available_copies)
-  VALUES (pBookId, pTitle, pGenre, pPublisherId, pCopies, pCopies);
+  -- Return the created/updated row id and stock
+  SELECT LAST_INSERT_ID() AS book_id,
+         (SELECT copies FROM books WHERE book_id = COALESCE(LAST_INSERT_ID(), pBookId)) AS copies,
+         (SELECT available_copies FROM books WHERE book_id = COALESCE(LAST_INSERT_ID(), pBookId)) AS available_copies;
 END;
-
 
 /* -------------------------------------------------
    UpdateBookInventory: admin sets total copies.
@@ -188,7 +202,7 @@ BEGIN
 
   COMMIT;
 
-  -- return updated stock numbers
+  -- Return updated stock numbers
   SELECT pBookId AS book_id,
          pNewCopies AS copies,
          vNewAvail AS available_copies;
@@ -204,7 +218,10 @@ BEGIN
   VALUES (pStaffId, pAction, NOW());
 END;
 
-
+/* -------------------------------------------------
+   UpdateBookAvailable: admin sets available_copies directly.
+   Keep borrowed constant; adjust total copies to borrowed + new available.
+-------------------------------------------------- */
 DROP PROCEDURE IF EXISTS UpdateBookAvailable;
 CREATE PROCEDURE UpdateBookAvailable(
   IN pBookId INT,

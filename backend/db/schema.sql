@@ -1,99 +1,68 @@
 -- ======================================
--- Smart Library Platform - Universal Schema
--- Works on MySQL 5.7+
+-- Smart Library Platform - Universal Schema (MySQL 5.7+)
+-- Safe to re-run; no DELIMITER required
 -- ======================================
 
--- Temporarily disable foreign key checks
+/* --------------------------------------
+   Drop (in dependency order) — optional
+   Comment this whole block if you want to preserve data
+--------------------------------------- */
 SET FOREIGN_KEY_CHECKS = 0;
-
--- Drop tables in reverse dependency order
 DROP TABLE IF EXISTS staff_log;
 DROP TABLE IF EXISTS review;
 DROP TABLE IF EXISTS checkout;
 DROP TABLE IF EXISTS book_authors;
+DROP TABLE IF EXISTS book_publishers;
 DROP TABLE IF EXISTS books;
 DROP TABLE IF EXISTS authors;
 DROP TABLE IF EXISTS publishers;
 DROP TABLE IF EXISTS users;
-DROP TABLE IF EXISTS book_publishers;
-
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ======================
 -- Core Tables
 -- ======================
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
   email VARCHAR(100) UNIQUE NOT NULL,
   password VARCHAR(255) NOT NULL,
-  role ENUM('reader', 'staff', 'admin') NOT NULL DEFAULT 'reader'
+  role ENUM('reader','staff','admin') NOT NULL DEFAULT 'reader'
 );
 
-CREATE TABLE publishers (
-  publisher_id INT PRIMARY KEY,
-  name VARCHAR(100),
+CREATE TABLE IF NOT EXISTS publishers (
+  publisher_id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
   address VARCHAR(255)
 );
 
-CREATE TABLE authors (
-  author_id INT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS authors (
+  author_id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(100) NOT NULL
 );
 
-CREATE TABLE books (
-  book_id INT PRIMARY KEY,
-  title VARCHAR(255),
+CREATE TABLE IF NOT EXISTS books (
+  book_id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
   genre VARCHAR(100),
   publisher_id INT,
-  copies INT DEFAULT 1,
-  available_copies INT DEFAULT 1,
+  copies INT NOT NULL DEFAULT 1,
+  available_copies INT NOT NULL DEFAULT 1,
   image_url VARCHAR(255) NULL,
   CONSTRAINT fk_books_publisher FOREIGN KEY (publisher_id) REFERENCES publishers(publisher_id)
 );
 
-CREATE TABLE book_authors (
-  book_id INT,
-  author_id INT,
+CREATE TABLE IF NOT EXISTS book_authors (
+  book_id INT NOT NULL,
+  author_id INT NOT NULL,
   PRIMARY KEY (book_id, author_id),
-  CONSTRAINT fk_book_authors_book FOREIGN KEY (book_id) REFERENCES books(book_id) ON DELETE CASCADE,
+  CONSTRAINT fk_book_authors_book   FOREIGN KEY (book_id)   REFERENCES books(book_id)     ON DELETE CASCADE,
   CONSTRAINT fk_book_authors_author FOREIGN KEY (author_id) REFERENCES authors(author_id) ON DELETE CASCADE
 );
 
-CREATE TABLE checkout (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  userId INT,
-  bookId INT,
-  checkoutAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-  returnAt DATETIME,
-  dueAt DATETIME NULL,
-  isLate BOOLEAN,
-  CONSTRAINT fk_checkout_user FOREIGN KEY (userId) REFERENCES users(id),
-  CONSTRAINT fk_checkout_book FOREIGN KEY (bookId) REFERENCES books(book_id)
-);
-
-CREATE TABLE review (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  userId INT,
-  bookId INT,
-  rating INT,
-  comment TEXT,
-  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT chk_rating_range CHECK (rating BETWEEN 1 AND 5),
-  CONSTRAINT fk_review_user FOREIGN KEY (userId) REFERENCES users(id),
-  CONSTRAINT fk_review_book FOREIGN KEY (bookId) REFERENCES books(book_id)
-);
-
-CREATE TABLE staff_log (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  staffId INT,
-  action VARCHAR(255),
-  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_stafflog_user FOREIGN KEY (staffId) REFERENCES users(id)
-);
-
-CREATE TABLE book_publishers (
+-- Optional: mirror M2M publishers if you want multi-publisher books
+CREATE TABLE IF NOT EXISTS book_publishers (
   book_id INT NOT NULL,
   publisher_id INT NOT NULL,
   PRIMARY KEY (book_id, publisher_id),
@@ -101,21 +70,91 @@ CREATE TABLE book_publishers (
   CONSTRAINT fk_bp_pub  FOREIGN KEY (publisher_id) REFERENCES publishers(publisher_id) ON DELETE CASCADE
 );
 
--- Backfill M2M table from main books table
+-- Backfill M2M from books.publisher_id if present
 INSERT IGNORE INTO book_publishers (book_id, publisher_id)
 SELECT b.book_id, b.publisher_id
 FROM books b
 WHERE b.publisher_id IS NOT NULL;
 
--- Re-enable foreign key checks
-SET FOREIGN_KEY_CHECKS = 1;
+-- ======================
+-- Circulation / Transactions
+-- ======================
 
--- One review per user per book
-ALTER TABLE review
-  ADD UNIQUE KEY uq_review_user_book (userId, bookId);
+CREATE TABLE IF NOT EXISTS checkout (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  userId INT NOT NULL,
+  bookId INT NOT NULL,
+  checkoutAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  dueAt DATETIME NULL,            -- allow NULL (grace-policy fallback)
+  returnAt DATETIME DEFAULT NULL,
+  isLate BOOLEAN NOT NULL DEFAULT 0,
+  CONSTRAINT fk_checkout_user FOREIGN KEY (userId) REFERENCES users(id),
+  CONSTRAINT fk_checkout_book FOREIGN KEY (bookId) REFERENCES books(book_id),
 
--- Fast listing by book
-CREATE INDEX ix_review_book ON review (bookId, createdAt);
+  -- helpful indexes
+  KEY ix_checkout_user_date (userId, checkoutAt),
+  KEY ix_checkout_active    (returnAt, dueAt)
+);
 
--- Fast listing by user (if you plan to show "my reviews")
-CREATE INDEX ix_review_user ON review (userId, createdAt);
+-- ======================
+-- Reviews
+-- ======================
+
+CREATE TABLE IF NOT EXISTS review (
+  review_id INT AUTO_INCREMENT PRIMARY KEY,
+  userId INT NOT NULL,
+  bookId INT NOT NULL,
+  rating INT,
+  comment TEXT,
+  createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT chk_rating_range CHECK (rating BETWEEN 1 AND 5),
+  CONSTRAINT fk_review_user FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_review_book FOREIGN KEY (bookId) REFERENCES books(book_id) ON DELETE CASCADE,
+
+  -- one review per user per book (defined here to avoid duplicate key errors)
+  UNIQUE KEY uq_review_user_book (userId, bookId),
+
+  -- helpful indexes
+  KEY ix_review_book (bookId, createdAt),
+  KEY ix_review_user (userId, createdAt)
+);
+
+-- ======================
+-- Staff Action Logs
+-- ======================
+
+CREATE TABLE IF NOT EXISTS staff_log (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  staffId INT NOT NULL,
+  action VARCHAR(255) NOT NULL,
+  createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_stafflog_user FOREIGN KEY (staffId) REFERENCES users(id)
+);
+
+-- ======================
+-- Trigger: auto-compute isLate when returnAt is set or updated
+-- No DELIMITER needed; single-statement trigger body
+--   Policy:
+--     - if dueAt is NOT NULL → Late when returnAt > dueAt
+--     - if dueAt is NULL     → Late when (returnAt - checkoutAt) > 14 days
+-- ======================
+
+DROP TRIGGER IF EXISTS checkout_set_isLate;
+CREATE TRIGGER checkout_set_isLate
+BEFORE UPDATE ON checkout
+FOR EACH ROW
+SET NEW.isLate = CASE
+  WHEN NEW.returnAt IS NULL THEN NEW.isLate
+  WHEN NEW.dueAt   IS NOT NULL THEN (NEW.returnAt > NEW.dueAt)
+  ELSE (TIMESTAMPDIFF(DAY, NEW.checkoutAt, NEW.returnAt) > 14)
+END;
+
+-- ======================
+-- Optional one-time backfill (safe to re-run)
+-- ======================
+UPDATE checkout
+SET isLate = CASE
+  WHEN returnAt IS NULL THEN isLate
+  WHEN dueAt   IS NOT NULL THEN (returnAt > dueAt)
+  ELSE (TIMESTAMPDIFF(DAY, checkoutAt, returnAt) > 14)
+END;

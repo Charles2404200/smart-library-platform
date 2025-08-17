@@ -29,7 +29,9 @@ async function getMyBorrows(db, userId) {
        c.checkoutAt,
        c.dueAt,
        c.returnAt,
-       (c.returnAt IS NULL AND c.dueAt IS NOT NULL AND NOW() > c.dueAt) AS overdue
+       -- overdue = has due date, not returned, and now is past due
+       (c.returnAt IS NULL AND c.dueAt IS NOT NULL AND NOW() > c.dueAt) AS overdue,
+       c.isLate
      FROM checkout c
      JOIN books b ON b.book_id = c.bookId
      WHERE c.userId = ?

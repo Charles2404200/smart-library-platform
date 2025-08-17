@@ -5,10 +5,19 @@ function fmt(d) {
 }
 
 function computeOverdue(row) {
-  if (row.overdue !== undefined && row.overdue !== null) return !!Number(row.overdue);
-  if (!row.dueAt || row.returnAt) return false;
-  return Date.now() > new Date(row.dueAt).getTime();
+  // server says it's overdue
+  const serverOverdue =
+    row.overdue === true ||
+    row.overdue === 1 ||
+    row.overdue === '1';
+
+  // client check: dueAt passed and not yet returned, and local time beyond dueAt
+  const clientOverdue =
+    !!row.dueAt && !row.returnAt && Date.now() > new Date(row.dueAt).getTime();
+
+  return serverOverdue || clientOverdue;
 }
+
 
 function DueBadge({ row }) {
   const overdue = computeOverdue(row);

@@ -12,14 +12,19 @@ const db = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0,
 
-  timezone: 'Z',        // send/receive in UTC
-  dateStrings: true,    // return DATETIME/TIMESTAMP as "YYYY-MM-DD HH:MM:SS"
+  timezone: 'Z',     // send/receive in UTC
+  dateStrings: true, // return DATETIME/TIMESTAMP as "YYYY-MM-DD HH:MM:SS"
 });
 
-// Ensure each new connection runs with UTC session time_zone too
-db.on?.('connection', (conn) => {
-  conn.query("SET time_zone = '+00:00'");
-});
+// Ensure all sessions use UTC
+db.query("SET time_zone = '+00:00'").catch(console.error);
+
+// Safety: enforce UTC whenever a new connection is created
+if (typeof db.on === 'function') {
+  db.on('connection', (conn) => {
+    conn.query("SET time_zone = '+00:00'").catch(() => {});
+  });
+}
 
 module.exports = (req, res, next) => {
   req.db = db;
