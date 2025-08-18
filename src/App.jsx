@@ -10,6 +10,7 @@ import RegisterPage from './pages/RegisterPage/RegisterPage';
 import ViewBooksPage from './pages/ViewBooks/ViewBooks';
 import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
 import BorrowedBooks from './pages/BorrowedBooks/BorrowedBooks';
+import SettingsPage from './pages/SettingsPage';
 
 // Shared
 import Navbar from './components/navbar/Navbar';
@@ -142,6 +143,10 @@ function App() {
             />
           }
         />
+          <Route
+            path="/settings"
+            element={ <PrivateRoute element={<SettingsPage />} roles={['reader', 'staff', 'admin']} /> }
+          />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
