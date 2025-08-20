@@ -1,16 +1,5 @@
 -- ============================================
 -- Stored Procedures for Smart Library (MySQL 5.7+)
--- Tables used:
---   books(book_id, title, genre, publisher_id, copies, available_copies)
---   checkout(id, userId, bookId, checkoutAt, dueAt, returnAt, isLate)
---   review(review_id, userId, bookId, rating, comment, createdAt)
---   staff_log(id, staffId, action, createdAt)
--- ============================================
-
-/* -------------------------------------------------
-   BorrowBook: creates a checkout, decrements availability,
-   and returns the fresh availability for the book.
-   Concurrency-safe via SELECT ... FOR UPDATE.
 -------------------------------------------------- */
 DROP PROCEDURE IF EXISTS BorrowBook;
 CREATE PROCEDURE BorrowBook(

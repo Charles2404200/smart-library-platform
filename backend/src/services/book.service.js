@@ -81,7 +81,6 @@ async function getAvailability(db, bookId) {
 
 /**
  * Search books by *title only* with exact-match preference.
- * Behavior:
  *  - If q is numeric: try exact book_id first.
  *  - Try exact title match (case-insensitive) → if found, return only exact matches.
  *  - Else fallback to title LIKE %q% (case-insensitive).

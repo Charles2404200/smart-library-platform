@@ -4,7 +4,7 @@ const router = express.Router();
 
 const BookController = require('../controllers/book.controller');
 
-// ✅ Search route first so it doesn't get caught by :bookId
+// Search route first so it doesn't get caught by :bookId
 router.get('/search/all', BookController.searchBooks);
 
 // List all books
