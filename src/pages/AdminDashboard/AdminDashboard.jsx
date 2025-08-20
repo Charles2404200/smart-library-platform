@@ -1,3 +1,4 @@
+// src/pages/admin/AdminDashboard.jsx
 import React, { useEffect, useState } from 'react';
 import AddBookForm from '../../components/admin/AddBookForm';
 import BooksTable from '../../components/admin/BooksTable';
@@ -148,6 +149,31 @@ export default function AdminDashboard() {
     }
   };
 
+  // NEW: Retire / Unretire handlers
+  const onRetire = async (bookId) => {
+    try {
+      await adminApi.retireBook(bookId);
+      setBooks(prev => prev.map(b =>
+        b.book_id === bookId ? { ...b, retired: 1 } : b
+      ));
+      await loadLogs();
+    } catch (e) {
+      alert(e.message || 'Failed to retire book');
+    }
+  };
+
+  const onUnretire = async (bookId) => {
+    try {
+      await adminApi.unretireBook(bookId);
+      setBooks(prev => prev.map(b =>
+        b.book_id === bookId ? { ...b, retired: 0 } : b
+      ));
+      await loadLogs();
+    } catch (e) {
+      alert(e.message || 'Failed to unretire book');
+    }
+  };
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-10">
       <h1 className="text-3xl font-bold text-indigo-700">🛠 Admin Panel</h1>
@@ -167,10 +193,13 @@ export default function AdminDashboard() {
         onSaveAvailable={onSaveAvailable}
         onUploadCover={onUploadCover}
         uploadingRow={uploadingRow}
+
+        // NEW
+        onRetire={onRetire}
+        onUnretire={onUnretire}
       />
 
       <StaffLogsTable logs={logs} loading={loadingLogs} />
-
       <UsersTable users={users} loading={loadingUsers} onChangeRole={onChangeRole} />
     </div>
   );

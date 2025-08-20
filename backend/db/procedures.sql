@@ -9,13 +9,14 @@ CREATE PROCEDURE BorrowBook(
   IN pDueAt    DATETIME
 )
 BEGIN
-  DECLARE vAvail INT;
+  DECLARE vAvail   INT;
+  DECLARE vRetired TINYINT(1);
 
   START TRANSACTION;
 
-  -- Lock row and fetch availability
-  SELECT available_copies
-    INTO vAvail
+  -- Lock row and fetch availability + retired flag
+  SELECT available_copies, retired
+    INTO vAvail, vRetired
   FROM books
   WHERE book_id = pBookId
   FOR UPDATE;
@@ -24,24 +25,84 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Book not found';
   END IF;
 
+  IF vRetired = 1 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Book is retired and cannot be borrowed';
+  END IF;
+
   IF vAvail <= 0 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No copies available';
   END IF;
 
-  -- Create checkout (use provided times)
   INSERT INTO checkout (userId, bookId, checkoutAt, dueAt)
   VALUES (pUserId, pBookId, pBorrowAt, pDueAt);
 
-  -- Decrement availability
   UPDATE books
   SET available_copies = available_copies - 1
   WHERE book_id = pBookId;
 
   COMMIT;
 
-  -- Return updated availability
   SELECT pBookId AS book_id,
          (SELECT available_copies FROM books WHERE book_id = pBookId) AS available_copies;
+END;
+
+/* ---------- RetireBook ---------- */
+DROP PROCEDURE IF EXISTS RetireBook;
+CREATE PROCEDURE RetireBook(
+  IN pBookId INT,
+  IN pStaffId INT,
+  IN pReason VARCHAR(255)
+)
+BEGIN
+  START TRANSACTION;
+
+  UPDATE books
+  SET retired = 1,
+      retired_at = UTC_TIMESTAMP(),
+      retired_by = pStaffId,
+      retired_reason = pReason
+  WHERE book_id = pBookId;
+
+  IF ROW_COUNT() = 0 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Book not found';
+  END IF;
+
+  -- optional clamp (kept as comment)
+  -- UPDATE books SET available_copies = LEAST(available_copies, copies) WHERE book_id = pBookId;
+
+  INSERT INTO staff_log (staffId, action, createdAt)
+  VALUES (pStaffId,
+          CONCAT('Retired book #', pBookId, ' reason=', COALESCE(pReason,'')),
+          UTC_TIMESTAMP());
+
+  COMMIT;
+
+  SELECT pBookId AS book_id, 1 AS retired;
+END;
+
+
+/* ---------- UnretireBook ---------- */
+DROP PROCEDURE IF EXISTS UnretireBook;
+CREATE PROCEDURE UnretireBook(
+  IN pBookId INT,
+  IN pStaffId INT
+)
+BEGIN
+  START TRANSACTION;
+
+  UPDATE books
+  SET retired = 0,
+      retired_at = NULL,
+      retired_by = NULL,
+      retired_reason = NULL
+  WHERE book_id = pBookId;
+
+  COMMIT;
+
+  INSERT INTO staff_log (staffId, action, createdAt)
+  VALUES (pStaffId, CONCAT('Unretired book #', pBookId), UTC_TIMESTAMP());
+
+  SELECT pBookId AS book_id, 0 AS retired;
 END;
 
 /* -------------------------------------------------

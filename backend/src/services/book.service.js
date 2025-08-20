@@ -14,6 +14,8 @@ async function getAllBooks(db) {
       b.book_id AS id,
       b.title,
       b.genre,
+      b.retired,
+      b.retired_at,
       p.name AS publisher,
       b.copies,
       b.available_copies,
@@ -43,6 +45,8 @@ async function getBookById(db, bookId) {
       b.book_id AS id,
       b.title,
       b.genre,
+      b.retired,
+      b.retired_at,
       p.name AS publisher,
       b.copies,
       b.available_copies,
@@ -69,14 +73,15 @@ async function getBookById(db, bookId) {
  */
 async function getAvailability(db, bookId) {
   const [rows] = await db.query(
-    'SELECT copies, available_copies FROM books WHERE book_id = ? LIMIT 1',
+    'SELECT copies, available_copies, retired FROM books WHERE book_id = ? LIMIT 1',
     [Number(bookId)]
   );
   if (rows.length === 0) return null;
 
-  const { copies, available_copies } = rows[0];
-  const available = (available_copies != null ? available_copies : copies) > 0;
-  return { available, copies, available_copies };
+  const { copies, available_copies, retired } = rows[0];
+  const availableCount = (available_copies != null ? available_copies : copies);
+  const available = !retired && availableCount > 0;  // 🔹 block if retired
+  return { available, copies, available_copies, retired: !!retired };
 }
 
 /**
@@ -114,6 +119,8 @@ async function searchBooks(db, opts = {}) {
         b.book_id AS id,
         b.title,
         b.genre,
+        b.retired,
+        b.retired_at,
         p.name AS publisher,
         b.copies,
         b.available_copies,

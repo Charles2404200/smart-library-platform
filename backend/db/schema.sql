@@ -50,8 +50,19 @@ CREATE TABLE IF NOT EXISTS books (
   copies INT NOT NULL DEFAULT 1,
   available_copies INT NOT NULL DEFAULT 1,
   image_url VARCHAR(255) NULL,
-  CONSTRAINT fk_books_publisher FOREIGN KEY (publisher_id) REFERENCES publishers(publisher_id)
+
+  -- 🔹 retirement controls
+  retired TINYINT(1) NOT NULL DEFAULT 0,
+  retired_at DATETIME NULL,
+  retired_by INT NULL,
+  retired_reason VARCHAR(255) NULL,
+
+  CONSTRAINT fk_books_publisher  FOREIGN KEY (publisher_id) REFERENCES publishers(publisher_id),
+  CONSTRAINT fk_books_retired_by FOREIGN KEY (retired_by)   REFERENCES users(id),
+
+  KEY ix_books_retired (retired)
 );
+
 
 CREATE TABLE IF NOT EXISTS book_authors (
   book_id INT NOT NULL,
@@ -158,3 +169,13 @@ SET isLate = CASE
   WHEN dueAt   IS NOT NULL THEN (returnAt > dueAt)
   ELSE (TIMESTAMPDIFF(DAY, checkoutAt, returnAt) > 14)
 END;
+
+ALTER TABLE books
+  ADD COLUMN retired TINYINT(1) NOT NULL DEFAULT 0 AFTER image_url,
+  ADD COLUMN retired_at DATETIME NULL AFTER retired,
+  ADD COLUMN retired_by INT NULL AFTER retired_at,
+  ADD COLUMN retired_reason VARCHAR(255) NULL AFTER retired_by;
+
+ALTER TABLE books
+  ADD CONSTRAINT fk_books_retired_by
+  FOREIGN KEY (retired_by) REFERENCES users(id);

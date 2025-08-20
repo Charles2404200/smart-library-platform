@@ -1,7 +1,7 @@
 // src/pages/ViewBooks/ViewBooks.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getBooks, searchBooks as searchBooksAPI } from '../../services/booksService';
+import { getBooks, searchBooks as searchBooksAPI, getAvailability } from '../../services/booksService';
 import { borrowBook } from '../../services/borrowService';
 import { ReviewsAPI } from '../../services/reviews';
 import BooksGrid from '../../components/books/BooksGrid';
@@ -49,8 +49,20 @@ export default function ViewBooksPage() {
       avg_rating: Number(b.avg_rating ?? b.average_rating ?? b.avgRating ?? 0),
       reviews_count: Number(b.reviews_count ?? b.review_count ?? b.countReviews ?? 0),
       available_copies: b.available_copies ?? b.copies ?? 0,
+      // keep any retired flag that may come from backend (if present)
+      retired: !!b.retired,
     };
   };
+
+  function markRetiredLocally(bookId) {
+    setBooks(prev =>
+      prev.map(b =>
+        Number(b.id ?? b.book_id) === Number(bookId)
+          ? { ...b, retired: true, _retired: true }
+          : b
+      )
+    );
+  }
 
   // ---- fetch aggregate for books missing it (FE fallback)
   async function hydrateAggregates(list) {
@@ -132,8 +144,23 @@ export default function ViewBooksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  // open borrow modal
-  const openBorrowModal = (book) => {
+  // open borrow modal (with retired/availability guard)
+  const openBorrowModal = async (book) => {
+    try {
+      const a = await getAvailability(book.id ?? book.book_id); // { available, copies, available_copies, retired }
+      if (a?.retired) {
+        setBorrowStatus('❌ This book has been retired by the library and cannot be borrowed.');
+        markRetiredLocally(book.id ?? book.book_id);
+        return;
+      }
+      if (!a?.available) {
+        setBorrowStatus('❌ No copies available at the moment.');
+        return;
+      }
+    } catch {
+      // ignore — backend will still enforce, but FE tries to be helpful
+    }
+
     const now = new Date();
     const plus14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
     const fmt = (d) => {
@@ -165,7 +192,7 @@ export default function ViewBooksPage() {
     }
 
     try {
-      const result = await borrowBook({
+      await borrowBook({
         bookId: selectedBook.id ?? selectedBook.book_id,
         borrowAt,
         dueAt,
@@ -173,21 +200,29 @@ export default function ViewBooksPage() {
 
       setBorrowStatus(`✅ Borrowed "${selectedBook.title}" successfully`);
 
-      const returnedId = Number(
-        result.book_id ?? result.bookId ?? result?.updated?.book_id ?? result?.updated?.bookId
-      );
-      const returnedAvail = result.available_copies ?? result?.updated?.available_copies;
-
-      if (!Number.isNaN(returnedId) && typeof returnedAvail === 'number') {
-        setBooks((prev) =>
-          prev.map((b) => ((Number(b.id ?? b.book_id) === returnedId)
-            ? { ...b, available_copies: returnedAvail }
-            : b))
+      // 🔹 Always confirm with the server so the button stays disabled without a reload
+      const selId = Number(selectedBook.id ?? selectedBook.book_id);
+      try {
+        const fresh = await getAvailability(selId); // { available, copies, available_copies, retired }
+        setBooks(prev =>
+          prev.map(b => {
+            const id = Number(b.id ?? b.book_id);
+            return id === selId
+              ? {
+                  ...b,
+                  copies: typeof fresh.copies === 'number' ? fresh.copies : b.copies,
+                  available_copies: typeof fresh.available_copies === 'number'
+                    ? fresh.available_copies
+                    : (b.available_copies ?? b.copies ?? 0),
+                  retired: !!fresh.retired,
+                }
+              : b;
+          })
         );
-      } else {
-        const selId = Number(selectedBook.id ?? selectedBook.book_id);
-        setBooks((prev) =>
-          prev.map((b) =>
+      } catch {
+        // fallback: optimistic local decrement
+        setBooks(prev =>
+          prev.map(b =>
             Number(b.id ?? b.book_id) === selId
               ? { ...b, available_copies: Math.max(0, (b.available_copies ?? b.copies) - 1) }
               : b
@@ -199,9 +234,9 @@ export default function ViewBooksPage() {
         alert('⚠️ Warning: your selected due date is already in the past!');
       }
 
+      // optional refresh after a short delay (kept from your version)
       setTimeout(() => {
         closeBorrowModal();
-        // refresh respecting current query
         const q = (searchParams.get('q') || '').trim();
         if (q.length >= 1) {
           (async () => {

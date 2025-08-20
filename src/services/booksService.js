@@ -22,3 +22,7 @@ export async function searchBooks(params = {}) {
 
   return http(`/api/books/search/all?${qs.toString()}`);
 }
+
+export async function getAvailability(bookId) {
+  return http(`/api/books/${bookId}/availability`);
+}
