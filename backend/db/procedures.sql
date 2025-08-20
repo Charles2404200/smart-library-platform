@@ -46,11 +46,6 @@ END;
 
 /* -------------------------------------------------
    ReturnBook: sets returnAt/isLate, increments availability
-   (capped at total copies), and returns fresh availability.
-   Late rule (UTC):
-     - if dueAt IS NOT NULL → late when UTC_TIMESTAMP() > dueAt
-     - else fallback to 14 days since checkoutAt
-   Concurrency-safe via SELECT ... FOR UPDATE.
 -------------------------------------------------- */
 DROP PROCEDURE IF EXISTS ReturnBook;
 CREATE PROCEDURE ReturnBook(IN pCheckoutId INT)
@@ -121,8 +116,6 @@ END;
 
 /* -------------------------------------------------
    AddBook: insert a new book. Because schema defines
-   books.book_id as AUTO_INCREMENT, we accept pBookId as NULL for auto-id.
-   available_copies starts equal to copies.
 -------------------------------------------------- */
 DROP PROCEDURE IF EXISTS AddBook;
 CREATE PROCEDURE AddBook(
