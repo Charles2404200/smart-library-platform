@@ -281,8 +281,92 @@ async function unretireBook(req, res) {
     return res.status(500).json({ error: err.message || 'Failed to unretire book' });
   }
 }
+// -------- Reports (admin) --------
+/**
+ * GET /api/admin/reports/most-borrowed?start=YYYY-MM-DD&end=YYYY-MM-DD&limit=N
+ */
+async function mostBorrowedReport(req, res) {
+  const db = req.db;
+  const { start, end, limit } = req.query;
+  const lim = Number(limit) || 10;
+  try {
+    let where = '1=1';
+    const params = [];
+    if (start) { where += ' AND c.checkoutAt >= ?'; params.push(start); }
+    if (end)   { where += ' AND c.checkoutAt <= ?'; params.push(end); }
+    params.push(lim);
+    const [rows] = await db.query(
+      `SELECT b.book_id, b.title, COUNT(c.id) AS borrow_count
+       FROM checkout c
+       JOIN books b ON c.bookId = b.book_id
+       WHERE ${where}
+       GROUP BY c.bookId
+       ORDER BY borrow_count DESC
+       LIMIT ?`,
+      params
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('❌ Report (most-borrowed) error:', err);
+    res.status(500).json({ error: 'Failed to generate most-borrowed report' });
+  }
+}
 
-module.exports = {
+/**
+ * GET /api/admin/reports/top-readers?start=&end=&limit=
+ */
+async function topReadersReport(req, res) {
+  const db = req.db;
+  const { start, end, limit } = req.query;
+  const lim = Number(limit) || 10;
+  try {
+    let where = '1=1';
+    const params = [];
+    if (start) { where += ' AND c.checkoutAt >= ?'; params.push(start); }
+    if (end)   { where += ' AND c.checkoutAt <= ?'; params.push(end); }
+    params.push(lim);
+    const [rows] = await db.query(
+      `SELECT u.id, u.name, u.email, COUNT(c.id) AS checkouts
+       FROM checkout c
+       JOIN users u ON c.userId = u.id
+       WHERE ${where}
+       GROUP BY u.id
+       ORDER BY checkouts DESC
+       LIMIT ?`,
+      params
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('❌ Report (top-readers) error:', err);
+    res.status(500).json({ error: 'Failed to generate top-readers report' });
+  }
+}
+
+/**
+ * GET /api/admin/reports/low-availability?threshold=NUMBER
+ */
+async function lowAvailabilityReport(req, res) {
+  const db = req.db;
+  const { threshold } = req.query;
+  const thr = Number(threshold) || 5;
+  try {
+    const [rows] = await db.query(
+      `SELECT book_id, title, copies, available_copies
+       FROM books
+       WHERE available_copies <= ?
+       ORDER BY available_copies ASC`,
+      [thr]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('❌ Report (low-availability) error:', err);
+    res.status(500).json({ error: 'Failed to generate low-availability report' });
+  }
+}
+
+
+
+  module.exports = {
   listBooks,
   listPublishers,
   listAuthors,
@@ -297,4 +381,9 @@ module.exports = {
   changeUserRole,
   retireBook,
   unretireBook,
+  mostBorrowedReport,
+  topReadersReport,
+  lowAvailabilityReport,
 };
+
+

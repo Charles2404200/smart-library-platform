@@ -1,5 +1,6 @@
 // src/pages/admin/AdminDashboard.jsx
 import React, { useEffect, useState } from 'react';
+import AdminReports from '../../components/admin/AdminReports';
 import AddBookForm from '../../components/admin/AddBookForm';
 import BooksTable from '../../components/admin/BooksTable';
 import StaffLogsTable from '../../components/admin/StaffLogsTable';
@@ -177,6 +178,9 @@ export default function AdminDashboard() {
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-10">
       <h1 className="text-3xl font-bold text-indigo-700">🛠 Admin Panel</h1>
+
+      {/* ADMIN REPORTS: inserted above AddBookForm as requested */}
+      <AdminReports />
 
       <AddBookForm onSubmit={onAddBook} adding={adding} />
 
