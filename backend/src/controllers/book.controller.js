@@ -1,15 +1,18 @@
-// src/controllers/book.controller.js
+// backend/src/controllers/book.controller.js
 const {
   getAllBooks,
   getBookById,
   getAvailability,
-  searchBooks, // Import the service function
+  searchBooks,
 } = require('../services/book.service');
 
 // Get list of all books
 async function listBooks(req, res) {
   try {
-    const rows = await getAllBooks(req.db);
+    const rows = await getAllBooks(req.db, {
+      page: req.query.page,
+      pageSize: req.query.pageSize,
+    });
     res.json(rows);
   } catch (err) {
     console.error('❌ Error fetching books:', err);
@@ -46,10 +49,13 @@ async function checkAvailability(req, res) {
 // Search books with filters, sorting, and pagination
 async function searchBooksCtrl(req, res) {
   try {
+    // Accept named filters (title, author, genre, publisher) + legacy q
     const {
       q = '',
-      genre,
-      publisher,
+      title = '',
+      author = '',
+      genre = '',
+      publisher = '',
       minRating,
       page = 1,
       pageSize = 12,
@@ -57,7 +63,10 @@ async function searchBooksCtrl(req, res) {
     } = req.query;
 
     const rows = await searchBooks(req.db, {
+      // pass both named and legacy q — service will prefer named when present
       q: String(q || ''),
+      title: (title || '').toString(),
+      author: (author || '').toString(),
       genre: genre ? String(genre) : undefined,
       publisher: publisher ? String(publisher) : undefined,
       minRating: (minRating != null && minRating !== '') ? Number(minRating) : undefined,
@@ -77,5 +86,5 @@ module.exports = {
   listBooks,
   getBook,
   checkAvailability,
-  searchBooks: searchBooksCtrl, // Make sure we export the search function
+  searchBooks: searchBooksCtrl,
 };
