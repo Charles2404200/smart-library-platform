@@ -76,7 +76,7 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
 
           {/* Profile / Auth links */}
           {isAuthenticated ? (
-            <ProfileDropdown onLogout={onLogout} />
+            <ProfileDropdown onLogout={onLogout} user={user} /> 
           ) : (
             <>
               <Link to="/login" className="text-gray-600 hover:text-indigo-700">Login</Link>
