@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FaUserCircle } from 'react-icons/fa';
 import { Link, useNavigate } from 'react-router-dom';
+import { API_URL } from '../../config/env'; // Thêm import này
 
-export default function ProfileDropdown({ onLogout }) {
+
+export default function ProfileDropdown({ onLogout, user }) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef();
   const navigate = useNavigate();
@@ -19,17 +21,27 @@ export default function ProfileDropdown({ onLogout }) {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user'); 
     onLogout?.();
     navigate('/login');
+    window.location.reload();
   };
+
+  const avatarSrc = user?.avatar_url
+      ? (user.avatar_url.startsWith('http') ? user.avatar_url : `${API_URL}${user.avatar_url}`)
+      : null;
 
   return (
     <div className="relative inline-block text-left" ref={dropdownRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="text-2xl text-indigo-700 focus:outline-none"
+        className="focus:outline-none"
       >
-        <FaUserCircle />
+        {avatarSrc ? (
+          <img src={avatarSrc} alt="User Avatar" className="w-8 h-8 rounded-full object-cover" />
+        ) : (
+          <FaUserCircle className="text-2xl text-indigo-700" />
+        )}
       </button>
 
       {open && (

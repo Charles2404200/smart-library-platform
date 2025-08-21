@@ -10,7 +10,7 @@ function normalizeRole(role) {
 }
 
 async function getUserByEmail(conn, email) {
-  const [rows] = await conn.query('SELECT * FROM users WHERE email = ? LIMIT 1', [email]);
+  const [rows] = await conn.query('SELECT id, name, email, password, role, avatar_url FROM users WHERE email = ? LIMIT 1', [email]);
   return rows[0] || null;
 }
 
