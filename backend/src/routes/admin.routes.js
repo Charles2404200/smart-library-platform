@@ -18,6 +18,10 @@ router.patch('/books/:id/available', Admin.adjustAvailable);
 router.post('/books/:id/image', upload.single('image'), Admin.uploadImage);
 router.delete('/books/:id', Admin.deleteBook);
 
+// Retire / Unretire (controller enforces admin-only)
+router.post('/books/:id/retire', Admin.retireBook);
+router.post('/books/:id/unretire', Admin.unretireBook);
+
 // ----- Lookups -----
 router.get('/publishers', Admin.listPublishers);
 router.get('/authors', Admin.listAuthors);

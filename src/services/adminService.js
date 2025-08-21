@@ -1,15 +1,11 @@
 // src/services/adminService.js
 import { http } from './http';
+import { API_URL } from '../config/env';
 
 // -------- Fetchers --------
-export const getBooks = () =>
-  http('/api/admin/books');
-
-export const getLogs = () =>
-  http('/api/admin/logs');
-
-export const getUsers = () =>
-  http('/api/admin/users');
+export const getBooks = () => http('/api/admin/books');
+export const getLogs  = () => http('/api/admin/logs');
+export const getUsers = () => http('/api/admin/users');
 
 // -------- Mutations --------
 export const updateCopies = (bookId, copies) =>
@@ -34,11 +30,16 @@ export const uploadBookImage = async (bookId, file) => {
   const token = JSON.parse(localStorage.getItem('token') || 'null');
   const fd = new FormData();
   fd.append('image', file);
-  const res = await fetch(`http://localhost:4000/api/admin/books/${bookId}/image`, {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    body: fd,
-  });
+
+  const res = await fetch(
+    `${API_URL}/api/admin/books/${bookId}/image`,
+    {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: fd,
+    }
+  );
+
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error || 'Failed to upload image');
   return data; // { image_url }
@@ -48,4 +49,15 @@ export const changeUserRole = (userId, role) =>
   http(`/api/admin/users/${userId}/role`, {
     method: 'PATCH',
     body: { role },
+  });
+
+/* -------- NEW: Retire / Unretire -------- */
+export const retireBook = (bookId) =>
+  http(`/api/admin/books/${bookId}/retire`, {
+    method: 'POST',
+  });
+
+export const unretireBook = (bookId) =>
+  http(`/api/admin/books/${bookId}/unretire`, {
+    method: 'POST',
   });

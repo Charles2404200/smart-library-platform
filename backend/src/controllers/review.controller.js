@@ -48,11 +48,11 @@ async function upsert(req, res) {
   }
 
   try {
-    // Optional: ensure the book exists (prevents FK errors)
+    // ensure the book exists (prevents FK errors)
     const [bookRows] = await db.query('SELECT 1 FROM books WHERE book_id = ? LIMIT 1', [bookId]);
     if (bookRows.length === 0) return res.status(404).json({ error: 'Book not found' });
 
-    // ✅ Atomic upsert using the UNIQUE (userId, bookId) constraint
+    // Atomic upsert using the UNIQUE (userId, bookId) constraint
     const sql = `
       INSERT INTO review (userId, bookId, rating, comment, createdAt)
       VALUES (?, ?, ?, ?, NOW())
@@ -85,7 +85,7 @@ async function upsert(req, res) {
     });
   } catch (err) {
     console.error('❌ upsert review error:', err);
-    // As an extra safety, if something still collided, do a fallback update:
+    // if something still collided, do a fallback update:
     if (err?.code === 'ER_DUP_ENTRY') {
       try {
         await db.query(

@@ -9,15 +9,16 @@ async function listBooks(req, res) {
     const [rows] = await db.query(`
       SELECT 
         b.book_id, b.title, b.genre, b.copies, b.available_copies, b.image_url,
+        b.retired, b.retired_at, b.retired_by, b.retired_reason,
         p.name AS primary_publisher,
         GROUP_CONCAT(DISTINCT p2.name ORDER BY p2.name SEPARATOR ', ') AS publishers,
         GROUP_CONCAT(DISTINCT a.name  ORDER BY a.name  SEPARATOR ', ') AS authors
       FROM books b
-      LEFT JOIN publishers p  ON b.publisher_id = p.publisher_id
+      LEFT JOIN publishers p   ON b.publisher_id = p.publisher_id
       LEFT JOIN book_publishers bp ON b.book_id = bp.book_id
-      LEFT JOIN publishers p2 ON bp.publisher_id = p2.publisher_id
+      LEFT JOIN publishers p2  ON bp.publisher_id = p2.publisher_id
       LEFT JOIN book_authors ba ON b.book_id = ba.book_id
-      LEFT JOIN authors a ON ba.author_id = a.author_id
+      LEFT JOIN authors a      ON ba.author_id = a.author_id
       GROUP BY b.book_id
       ORDER BY b.book_id DESC
     `);
@@ -241,6 +242,46 @@ async function changeUserRole(req, res) {
   }
 }
 
+// ---- Retire / Unretire book (admin only) ----
+async function retireBook(req, res) {
+  const db = req.db;
+  const bookId = Number(req.params.id);
+  const staffId = req.user?.id || null;
+  const { reason = '' } = req.body || {};
+
+  if (!Number.isInteger(bookId)) return res.status(400).json({ error: 'Invalid book id' });
+  if (!staffId) return res.status(403).json({ error: 'Auth required' });
+  if (!['admin'].includes(req.user?.role)) return res.status(403).json({ error: 'Only admin can retire books' });
+
+  try {
+    const [rs] = await db.query('CALL RetireBook(?, ?, ?)', [bookId, staffId, String(reason)]);
+    const payload = Array.isArray(rs) && Array.isArray(rs[0]) && rs[0][0] ? rs[0][0] : null;
+    return res.json({ message: 'Book retired', ...(payload || { book_id: bookId, retired: 1 }) });
+  } catch (err) {
+    console.error('❌ Retire book error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to retire book' });
+  }
+}
+
+async function unretireBook(req, res) {
+  const db = req.db;
+  const bookId = Number(req.params.id);
+  const staffId = req.user?.id || null;
+
+  if (!Number.isInteger(bookId)) return res.status(400).json({ error: 'Invalid book id' });
+  if (!staffId) return res.status(403).json({ error: 'Auth required' });
+  if (!['admin'].includes(req.user?.role)) return res.status(403).json({ error: 'Only admin can unretire books' });
+
+  try {
+    const [rs] = await db.query('CALL UnretireBook(?, ?)', [bookId, staffId]);
+    const payload = Array.isArray(rs) && Array.isArray(rs[0]) && rs[0][0] ? rs[0][0] : null;
+    return res.json({ message: 'Book unretired', ...(payload || { book_id: bookId, retired: 0 }) });
+  } catch (err) {
+    console.error('❌ Unretire book error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to unretire book' });
+  }
+}
+
 module.exports = {
   listBooks,
   listPublishers,
@@ -254,4 +295,6 @@ module.exports = {
   listLogs,
   listUsers,
   changeUserRole,
+  retireBook,
+  unretireBook,
 };
