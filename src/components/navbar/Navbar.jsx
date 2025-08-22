@@ -20,6 +20,11 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
     setIsOpen(false);
   };
 
+  const goToAdvanced = () => {
+    navigate('/search');
+    setIsOpen(false);
+  };
+
   const isStaffOrAdmin = isAuthenticated && (user?.role === 'staff' || user?.role === 'admin');
 
   return (
@@ -31,11 +36,11 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
         </Link>
 
         {/* Desktop Menu */}
-        <div className="hidden md:flex items-center space-x-6">
+        <div className="hidden md:flex items-center space-x-4">
           <Link to="/" className="text-gray-700 hover:text-indigo-700 transition">Home</Link>
           <Link to="/books" className="text-gray-700 hover:text-indigo-700 transition">View Books</Link>
 
-          {/* 🔎 Desktop search box */}
+          {/* Desktop search box */}
           <form onSubmit={submitSearch} className="flex items-center">
             <input
               value={term}
@@ -49,17 +54,27 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
             >
               Search
             </button>
+
+            {/* Advanced search shortcut button */}
+            <button
+              type="button"
+              onClick={goToAdvanced}
+              className="ml-2 px-3 py-1.5 bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200"
+              title="Open advanced search"
+            >
+              Filter
+            </button>
           </form>
 
           {/* Admin button (staff/admin) */}
           <AdminPanelButton user={user} />
 
-          {/* 📅 Calendar */}
+          {/* Calendar */}
           {isAuthenticated && (
             <CalendarWidget isAuthenticated={isAuthenticated} user={user} />
           )}
 
-          {/* Profile dropdown / auth links */}
+          {/* Profile / Auth links */}
           {isAuthenticated ? (
             <ProfileDropdown onLogout={onLogout} user={user} /> 
           ) : (
@@ -80,49 +95,36 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
 
       {/* Mobile Menu */}
       {isOpen && (
-        <div className="md:hidden px-4 pb-4 space-y-3">
+        <div className="md:hidden px-4 py-3 border-t bg-white space-y-2">
           <Link to="/" className="block text-gray-700 hover:text-indigo-700">Home</Link>
           <Link to="/books" className="block text-gray-700 hover:text-indigo-700">View Books</Link>
 
-          {/* 🔎 Mobile search box */}
           <form onSubmit={submitSearch} className="flex items-center">
             <input
               value={term}
               onChange={(e) => setTerm(e.target.value)}
-              placeholder="Search…"
-              className="flex-1 border rounded-l-md px-3 py-2"
+              placeholder="Search title, author, genre…"
+              className="border rounded-l-md px-3 py-1.5 w-full"
             />
             <button
               type="submit"
-              className="px-3 py-2 bg-indigo-600 text-white rounded-r-md hover:bg-indigo-700"
+              className="px-3 py-1.5 bg-indigo-600 text-white rounded-r-md hover:bg-indigo-700"
             >
-              Go
+              Search
             </button>
           </form>
 
-          {isStaffOrAdmin && (
-            <Link to="/admin" className="block text-gray-700 hover:text-indigo-700">Admin Panel</Link>
-          )}
+          <button
+            onClick={goToAdvanced}
+            className="w-full text-left px-3 py-2 bg-gray-100 rounded hover:bg-gray-200"
+          >
+            Advanced Search
+          </button>
 
-          {isAuthenticated && (
-            <Link to="/borrowed" className="block text-gray-700 hover:text-indigo-700">
-              📅 Due Dates & Borrowed
-            </Link>
-          )}
+          {isStaffOrAdmin && <Link to="/admin" className="block text-gray-700 hover:text-indigo-700">Admin Panel</Link>}
 
           {isAuthenticated ? (
-            <>
-              <Link to="/profile" className="block text-gray-700 hover:text-indigo-700">My Profile</Link>
-              <Link to="/dashboard" className="block text-gray-700 hover:text-indigo-700">Dashboard</Link>
-              <Link to="/borrowed" className="block text-gray-700 hover:text-indigo-700">Books Borrowed</Link>
-              <Link to="/settings" className="block text-gray-700 hover:text-indigo-700">Settings</Link>
-              <button
-                onClick={() => { onLogout?.(); navigate('/login'); }}
-                className="block w-full text-left text-red-600 hover:text-red-800"
-              >
-                Logout
-              </button>
-            </>
+            <ProfileDropdown onLogout={onLogout} />
           ) : (
             <>
               <Link to="/login" className="block text-gray-700 hover:text-indigo-700">Login</Link>

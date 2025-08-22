@@ -61,3 +61,25 @@ export const unretireBook = (bookId) =>
   http(`/api/admin/books/${bookId}/unretire`, {
     method: 'POST',
   });
+/* -------- Reports -------- */
+export const getMostBorrowed = ({ start, end, limit } = {}) => {
+  const q = new URLSearchParams();
+  if (start) q.set('start', start);
+  if (end) q.set('end', end);
+  if (limit) q.set('limit', limit);
+  return http(`/api/admin/reports/most-borrowed?${q.toString()}`);
+};
+
+export const getTopReaders = ({ start, end, limit } = {}) => {
+  const q = new URLSearchParams();
+  if (start) q.set('start', start);
+  if (end) q.set('end', end);
+  if (limit) q.set('limit', limit);
+  return http(`/api/admin/reports/top-readers?${q.toString()}`);
+};
+
+export const getLowAvailability = ({ threshold = 5 } = {}) => {
+  const q = new URLSearchParams();
+  q.set('threshold', threshold);
+  return http(`/api/admin/reports/low-availability?${q.toString()}`);
+};

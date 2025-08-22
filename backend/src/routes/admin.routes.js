@@ -32,5 +32,9 @@ router.get('/logs', Admin.listLogs);
 // ----- Users -----
 router.get('/users', Admin.listUsers);
 router.patch('/users/:id/role', Admin.changeUserRole);
+router.get('/reports/most-borrowed', Admin.mostBorrowedReport);
+router.get('/reports/top-readers', Admin.topReadersReport);
+router.get('/reports/low-availability', Admin.lowAvailabilityReport);
+
 
 module.exports = router;
