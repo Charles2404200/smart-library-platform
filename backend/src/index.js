@@ -1,4 +1,4 @@
-// index.js
+// src/index.js
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
@@ -12,31 +12,44 @@ const app = express();
 
 /* ---------------- MySQL Connection ---------------- */
 const pool = mysql.createPool({
-  uri: process.env.DATABASE_URL.replace('&ssl-mode=REQUIRED', ''),
-  ssl: {
-    ca: fs.readFileSync(process.env.MYSQL_SSL_CA),
-  },
+  // strip ssl-mode if present in the DATABASE_URL
+  uri: (process.env.DATABASE_URL || '').replace('&ssl-mode=REQUIRED', ''),
+  ssl: process.env.MYSQL_SSL_CA ? { ca: fs.readFileSync(process.env.MYSQL_SSL_CA) } : undefined,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
 });
-app.use((req, _res, next) => {
-  req.db = pool;
-  next();
-});
+app.use((req, _res, next) => { req.db = pool; next(); });
 
 /* ---------------- MongoDB Connection ---------------- */
-mongoose
-  .connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch((err) => console.error('❌ MongoDB connection error:', err));
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true, useUnifiedTopology: true,
+})
+.then(() => console.log('✅ MongoDB connected'))
+.catch((err) => console.error('❌ MongoDB connection error:', err));
 
-/* ---------------- Middleware ---------------- */
-app.use(cors());
+/* ---------------- CORS & Body Parsers ---------------- */
+// If you use Authorization headers (Bearer token), you DON'T need cookies/credentials.
+// Set explicit origins so preflight passes and allow Authorization header.
+app.use(cors({
+  origin: function (origin, callback) {
+    const allowed = ['http://localhost:5173', 'http://localhost:4000'];
+    if (!origin || allowed.includes(origin)) {
+      callback(null, origin);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Authorization','Content-Type'],
+}));
+
+// JSON bodies
 app.use(express.json());
+
+// Accept sendBeacon payloads (text/plain) so req.body is a string we can JSON.parse
+app.use(express.text({ type: 'text/plain' }));
 
 /* ---------------- Multer Config for Book Images ---------------- */
 const bookStorage = multer.diskStorage({
@@ -51,77 +64,63 @@ const bookStorage = multer.diskStorage({
   },
 });
 const uploadBookImage = multer({ storage: bookStorage });
+app.use((req, _res, next) => { req.uploadBookImage = uploadBookImage; next(); });
 
-// Make uploadBookImage available to routes via req
-app.use((req, _res, next) => {
-  req.uploadBookImage = uploadBookImage;
-  next();
-});
-
-/* ---------------- Serve Uploaded Images ---------------- */
-// Serves /uploads/** -> backend/uploads/**
+/* ---------------- Static Files ---------------- */
+// Serve uploaded images
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-/* ---------------- Route Mounting ---------------- */
-app.use('/api/auth', require('./routes/auth.routes'));
-app.use('/api/users', require('./routes/user.routes'));
-app.use('/api/books', require('./routes/book.routes'));
-app.use('/api/borrow', require('./routes/borrow.routes'));
+// Serve the default EPUB and any other reader assets from /public/assets
+// Place your default file at: backend/public/assets/default.epub
+app.use('/assets', express.static(path.join(__dirname, '../public/assets')));
+
+// (Optional) serve pdf.js UI if you also use the PDF reader anywhere
+app.use('/pdfjs', express.static(path.join(__dirname, '../public/pdfjs')));
+
+/* ---------------- Routes ---------------- */
+app.use('/api/auth',    require('./routes/auth.routes'));
+app.use('/api/users',   require('./routes/user.routes'));
+app.use('/api/books',   require('./routes/book.routes'));
+app.use('/api/borrow',  require('./routes/borrow.routes'));
 app.use('/api/reviews', require('./routes/review.routes'));
 app.use('/api/analytics', require('./routes/analytics.routes'));
-app.use('/api/admin', require('./routes/admin.routes'));
-app.use('/api/review', require('./routes/review.routes'));
+app.use('/api/admin',   require('./routes/admin.routes'));
+app.use('/api/review',  require('./routes/review.routes'));
 
-/* ---------------- Health Check ---------------- */
+// ⭐ Mount the ebooks routes (required by the reader)
+app.use('/api/ebooks',  require('./routes/ebook.routes'));
+
+// (If you have a separate reading analytics router that you actually use, mount it too)
+// app.use('/api/reading-analytics', require('./routes/readingAnalytics.routes'));
+
+/* ---------------- Health ---------------- */
 app.get('/', (_req, res) => res.send('📚 Smart Library Platform API is live!'));
 app.get('/healthz', (_req, res) => res.json({ ok: true }));
 
-/* ---------------- Start Server + Socket.IO ---------------- */
+/* ---------------- Socket.IO ---------------- */
 const http = require('http');
 const { Server } = require('socket.io');
-
 const PORT = process.env.PORT || 4000;
 const server = http.createServer(app);
 
-// Attach Socket.IO
 const io = new Server(server, {
-  path: '/socket.io',                                 // ← ADDED (explicit path)
+  path: '/socket.io',
   cors: {
-    origin: ['http://localhost:5173', 'http://localhost:3000'],
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Authorization', 'Content-Type'],
-    credentials: true,                                // ← ADDED (cookies/auth)
+    origin: ['http://localhost:5173', 'http://localhost:4000'],
+    methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+    allowedHeaders: ['Authorization','Content-Type'],
   },
-  transports: ['websocket', 'polling'],               // ← ADDED (allow fallback)
-  allowEIO3: false,                                    // ← ADDED (ensure v4)
-  pingTimeout: 20000,                                  // ← ADDED (stability)
-  pingInterval: 25000,                                 // ← ADDED (stability)
+  transports: ['websocket','polling'],
+  allowEIO3: false,
+  pingTimeout: 20000,
+  pingInterval: 25000,
 });
-
-// Helpful diagnostics for handshake issues
-io.engine.on('connection_error', (err) => {            // ← ADDED
-  console.error('🚨 Socket.IO connection_error:', {
-    code: err.code,
-    message: err.message,
-    context: err.context,
-  });
+io.engine.on('connection_error', (err) => {
+  console.error('🚨 Socket.IO connection_error:', { code: err.code, message: err.message, context: err.context });
 });
-
-// Expose io to routes: req.app.get('io')
 app.set('io', io);
-
-// Simple per-user rooms
 io.on('connection', (socket) => {
-  // Client should emit: socket.emit('join-user', userId)
-  socket.on('join-user', (userId) => {
-    if (userId) {
-      socket.join(`user:${userId}`);
-    }
-  });
-
-  socket.on('disconnect', () => {
-    // optional cleanup/logging
-  });
+  socket.on('join-user', (userId) => { if (userId) socket.join(`user:${userId}`); });
 });
 
 server.listen(PORT, () => {

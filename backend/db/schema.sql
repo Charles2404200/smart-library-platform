@@ -1,6 +1,6 @@
 -- ======================================
 -- Smart Library Platform - Universal Schema (MySQL 5.7+)
--- Safe to re-run; no DELIMITER required
+-- No DELIMITER blocks; safe to re-run on empty DB
 -- ======================================
 
 /* --------------------------------------
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS users (
   name VARCHAR(100) NOT NULL,
   email VARCHAR(100) UNIQUE NOT NULL,
   password VARCHAR(255) NOT NULL,
-  avatar_url VARCHAR(255) NULL, 
+  avatar_url VARCHAR(255) NULL,
   role ENUM('reader','staff','admin') NOT NULL DEFAULT 'reader'
 );
 
@@ -51,16 +51,13 @@ CREATE TABLE IF NOT EXISTS books (
   copies INT NOT NULL DEFAULT 1,
   available_copies INT NOT NULL DEFAULT 1,
   image_url VARCHAR(255) NULL,
-
-  -- 🔹 retirement controls
+  file_path VARCHAR(255) NULL, -- ✅ this line must exist
   retired TINYINT(1) NOT NULL DEFAULT 0,
   retired_at DATETIME NULL,
   retired_by INT NULL,
   retired_reason VARCHAR(255) NULL,
-
-  CONSTRAINT fk_books_publisher  FOREIGN KEY (publisher_id) REFERENCES publishers(publisher_id),
-  CONSTRAINT fk_books_retired_by FOREIGN KEY (retired_by)   REFERENCES users(id),
-
+  CONSTRAINT fk_books_publisher FOREIGN KEY (publisher_id) REFERENCES publishers(publisher_id),
+  CONSTRAINT fk_books_retired_by FOREIGN KEY (retired_by) REFERENCES users(id),
   KEY ix_books_retired (retired)
 );
 
@@ -123,7 +120,7 @@ CREATE TABLE IF NOT EXISTS review (
   CONSTRAINT fk_review_user FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
   CONSTRAINT fk_review_book FOREIGN KEY (bookId) REFERENCES books(book_id) ON DELETE CASCADE,
 
-  -- one review per user per book (defined here to avoid duplicate key errors)
+  -- one review per user per book
   UNIQUE KEY uq_review_user_book (userId, bookId),
 
   -- helpful indexes
@@ -145,10 +142,10 @@ CREATE TABLE IF NOT EXISTS staff_log (
 
 -- ======================
 -- Trigger: auto-compute isLate when returnAt is set or updated
--- No DELIMITER needed; single-statement trigger body
---   Policy:
---     - if dueAt is NOT NULL → Late when returnAt > dueAt
---     - if dueAt is NULL     → Late when (returnAt - checkoutAt) > 14 days
+-- (single-statement trigger body; no DELIMITER needed)
+-- Policy:
+--   - if dueAt is NOT NULL → Late when returnAt > dueAt
+--   - if dueAt is NULL     → Late when (returnAt - checkoutAt) > 14 days
 -- ======================
 
 DROP TRIGGER IF EXISTS checkout_set_isLate;
@@ -162,7 +159,7 @@ SET NEW.isLate = CASE
 END;
 
 -- ======================
--- Optional one-time backfill (safe to re-run)
+-- One-time backfill (safe to re-run)
 -- ======================
 UPDATE checkout
 SET isLate = CASE
@@ -170,13 +167,3 @@ SET isLate = CASE
   WHEN dueAt   IS NOT NULL THEN (returnAt > dueAt)
   ELSE (TIMESTAMPDIFF(DAY, checkoutAt, returnAt) > 14)
 END;
-
-ALTER TABLE books
-  ADD COLUMN retired TINYINT(1) NOT NULL DEFAULT 0 AFTER image_url,
-  ADD COLUMN retired_at DATETIME NULL AFTER retired,
-  ADD COLUMN retired_by INT NULL AFTER retired_at,
-  ADD COLUMN retired_reason VARCHAR(255) NULL AFTER retired_by;
-
-ALTER TABLE books
-  ADD CONSTRAINT fk_books_retired_by
-  FOREIGN KEY (retired_by) REFERENCES users(id);

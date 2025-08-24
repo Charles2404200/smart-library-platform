@@ -12,6 +12,8 @@ import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
 import BorrowedBooks from './pages/BorrowedBooks/BorrowedBooks';
 import SearchPage from './pages/SearchPage/SearchPage';
 import SettingsPage from './pages/SettingsPage';
+import ReaderPage from './pages/Reader/ReaderPage';
+import MyLibrary from './pages/MyLibrary/MyLibrary';
 
 // Shared
 import Navbar from './components/navbar/Navbar';
@@ -114,12 +116,19 @@ export default function App() {
         <Route path="/" element={<HomePage isAuthenticated={isAuthenticated} user={user} />} />
         <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
         <Route path="/register" element={<RegisterPage />} />
-
-        {/* Existing list page (kept) */}
         <Route path="/books" element={<ViewBooksPage />} />
-
-        {/* NEW advanced search page */}
         <Route path="/search" element={<SearchPage />} />
+        <Route path="/read/:bookId" element={<ReaderPage />} />
+        
+        <Route
+  path="/my-library"
+  element={
+    <PrivateRoute
+      element={<MyLibrary />}
+      roles={['reader', 'staff', 'admin']}
+    />
+  }
+/>
 
         {/* Borrowed (role: reader/staff/admin) */}
         <Route

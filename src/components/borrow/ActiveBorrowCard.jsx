@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 function fmt(d) {
   return d ? new Date(d).toLocaleString() : '—';
@@ -18,7 +19,6 @@ function computeOverdue(row) {
   return serverOverdue || clientOverdue;
 }
 
-
 function DueBadge({ row }) {
   const overdue = computeOverdue(row);
   if (overdue) {
@@ -32,7 +32,12 @@ function DueBadge({ row }) {
 
   const msLeft = new Date(row.dueAt).getTime() - Date.now();
   const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
-  const label = daysLeft > 1 ? `${daysLeft} days left` : daysLeft === 1 ? '1 day left' : 'Due today';
+  const label =
+    daysLeft > 1
+      ? `${daysLeft} days left`
+      : daysLeft === 1
+      ? '1 day left'
+      : 'Due today';
 
   return (
     <span className="ml-2 inline-block text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
@@ -67,14 +72,27 @@ export default function ActiveBorrowCard({ row, onReturn }) {
           </div>
         )}
       </div>
-      <div className="shrink-0">
+
+      <div className="flex gap-2 shrink-0">
+        {/* Button to return the book */}
         <button
           onClick={() => onReturn(id)}
           className="px-4 py-2 rounded text-white bg-emerald-600 hover:bg-emerald-700"
           title="Mark as returned"
         >
-          Return now
+          Return
         </button>
+
+        {/* If file_path exists, show Read button */}
+        {row.file_path && (
+          <Link
+            to={`/read/${row.bookId || row.book_id || row.id}`}
+            className="px-4 py-2 rounded text-white bg-indigo-600 hover:bg-indigo-700"
+            title="Read eBook"
+          >
+            Read
+          </Link>
+        )}
       </div>
     </div>
   );
