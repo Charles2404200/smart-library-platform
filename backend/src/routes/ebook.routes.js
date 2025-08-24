@@ -18,15 +18,9 @@ router.post('/:bookId/open', authenticateJWT, async (req, res) => {
     return res.status(400).json({ error: 'Invalid or missing bookId' });
   }
 
-  // (Optional) Only allow if currently borrowed:
-  // const [rows] = await req.db.query(
-  //   'SELECT 1 FROM checkout WHERE userId = ? AND bookId = ? AND returnAt IS NULL LIMIT 1',
-  //   [req.user.id, bookId]
-  // );
-  // if (!rows.length) return res.status(403).json({ error: 'Borrow this book to read.' });
+  // For testing: always return the uploaded PDF as the fake "book"
+  const fileUrl = '/assets/fakebook.pdf';
 
-  // Always serve the same demo EPUB
-  const fileUrl = '/assets/default.epub';
   const sessionId = `${req.user.id}:${bookId}:${Date.now()}`;
   return res.json({ sessionId, fileUrl });
 });

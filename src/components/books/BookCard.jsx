@@ -71,21 +71,6 @@ export default function BookCard({ book, onBorrow, onReviews, onReview }) {
         >
           Reviews
         </button>
-
-        {/* NEW: Read button -> /read/:bookId */}
-        <button
-          className="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white"
-          onClick={() => {
-            if (!Number.isFinite(id)) {
-              console.warn('Book missing id', book);
-              return;
-            }
-            // If you want to restrict to borrowed-only, check here before navigating.
-            window.location.href = `/read/${id}`;
-          }}
-        >
-          Read
-        </button>
       </div>
     </div>
   );
