@@ -1,7 +1,7 @@
 // src/App.jsx
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { jwtDecode } from 'jwt-decode';
+import { parseJwt } from './utils/jwt';
 
 // Pages
 import HomePage from './pages/HomePage/HomePage';
@@ -15,6 +15,20 @@ import SettingsPage from './pages/SettingsPage';
 
 // Shared
 import Navbar from './components/navbar/Navbar';
+import { storage } from './utils/storage';
+
+/**
+ * App-level authentication handling:
+ * - Read token from localStorage (via storage util).
+ * - Parse token `exp` and automatically logout when expired (in real time).
+ * - Sync logout/login across tabs using localStorage `logout` + `token` events.
+ *
+ * We intentionally force a full re-login when access token expires (per your request).
+ * If you want token refresh instead, we can add a refresh endpoint and silent refresh logic later.
+ */
+
+const CLOCK_SKEW_MS = 5 * 1000;       // tolerance for clock differences
+const LOGOUT_BEFORE_EXP_MS = 0;       // how many ms before exact exp to force logout (0 = at expiry)
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -23,79 +37,126 @@ export default function App() {
 
   const user = useMemo(() => profileUser || jwtUser, [profileUser, jwtUser]);
 
-  // Load token & user on first mount
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    const rawUser = localStorage.getItem('user');
+  // timers refs for scheduled logout
+  const logoutTimerRef = useRef(null);
 
-    if (rawUser) {
-      try { setProfileUser(JSON.parse(rawUser)); } catch { setProfileUser(null); }
-    }
-
-    if (token) {
-      try {
-        const decoded = jwtDecode(token);
-        setJwtUser(decoded);
-        setIsAuthenticated(true);
-      } catch (err) {
-        console.error('Invalid token:', err);
-        setJwtUser(null);
-        setIsAuthenticated(false);
-      }
+  const clearTimers = useCallback(() => {
+    if (logoutTimerRef.current) {
+      clearTimeout(logoutTimerRef.current);
+      logoutTimerRef.current = null;
     }
   }, []);
 
-  // Keep state in sync if token/user changes in another tab
-  useEffect(() => {
-    const onStorage = () => {
-      const token = localStorage.getItem('token');
-      const rawUser = localStorage.getItem('user');
-
-      if (rawUser) {
-        try { setProfileUser(JSON.parse(rawUser)); } catch { setProfileUser(null); }
-      } else {
-        setProfileUser(null);
-      }
-
-      if (token) {
-        try {
-          const decoded = jwtDecode(token);
-          setJwtUser(decoded);
-          setIsAuthenticated(true);
-        } catch {
-          setJwtUser(null);
-          setIsAuthenticated(false);
-        }
-      } else {
-        setJwtUser(null);
-        setIsAuthenticated(false);
-      }
-    };
-
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
-
-  const handleLogin = (token, userObj) => {
-    localStorage.setItem('token', token);
-    if (userObj) localStorage.setItem('user', JSON.stringify(userObj));
-    try {
-      const decoded = jwtDecode(token);
-      setJwtUser(decoded);
-      setProfileUser(userObj || null);
-      setIsAuthenticated(true);
-    } catch (e) {
-      console.error('login decode error', e);
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+  const doLogout = useCallback((silent = false) => {
+    // Clear timers and local state
+    clearTimers();
     setIsAuthenticated(false);
     setJwtUser(null);
     setProfileUser(null);
-  };
+
+    // Clear storage
+    try {
+      storage.remove('token');
+      storage.remove('user');
+    } catch (e) { /* ignore */ }
+
+    // Broadcast to other tabs
+    try {
+      localStorage.setItem('logout', Date.now().toString());
+    } catch (e) { /* ignore */ }
+
+    // Redirect to login
+    if (!silent) {
+      window.location.href = '/login';
+    }
+  }, [clearTimers]);
+
+  const scheduleLogout = useCallback((expiresAtMs) => {
+    clearTimers();
+    const now = Date.now();
+    const msUntil = Math.max(0, (expiresAtMs - LOGOUT_BEFORE_EXP_MS) - now);
+    logoutTimerRef.current = setTimeout(() => {
+      // On expiry, do a forced logout
+      doLogout(false);
+    }, msUntil);
+  }, [clearTimers, doLogout]);
+
+  // Called at login to set token & user and schedule logout
+  const handleLoginLocal = useCallback((token, userObj = null) => {
+    try {
+      if (token) storage.set('token', token);
+      if (userObj) storage.set('user', userObj);
+    } catch (e) { /* ignore */ }
+
+    const payload = parseJwt(token);
+    if (payload && payload.exp) {
+      setJwtUser(payload);
+      setProfileUser(userObj || null);
+      setIsAuthenticated(true);
+      scheduleLogout(payload.exp * 1000);
+    } else {
+      // malformed token -> ensure logged out for safety
+      doLogout(true);
+    }
+
+    // notify other tabs in case they want to sync
+    try { localStorage.setItem('token', Date.now().toString()); } catch(e){/*ignore*/}
+  }, [scheduleLogout, doLogout]);
+
+  // Global logout handler for UI (calls doLogout)
+  const handleLogout = useCallback(() => doLogout(false), [doLogout]);
+
+  // On mount: load token + user and schedule logout if token valid
+  useEffect(() => {
+    const token = storage.get('token', null);
+    const userObj = storage.get('user', null);
+    if (userObj) setProfileUser(userObj);
+
+    if (token) {
+      const payload = parseJwt(token);
+      if (!payload || !payload.exp) {
+        // malformed -> clear
+        doLogout(true);
+        return;
+      }
+      const expiresAt = payload.exp * 1000;
+      if (expiresAt <= Date.now() + CLOCK_SKEW_MS) {
+        // token already expired -> clear and redirect
+        doLogout(false);
+      } else {
+        setJwtUser(payload);
+        setIsAuthenticated(true);
+        scheduleLogout(expiresAt);
+      }
+    }
+
+    // Listen for cross-tab events
+    function onStorage(e) {
+      if (!e) return;
+      if (e.key === 'logout') {
+        // another tab logged out -> force logout silently here
+        doLogout(true);
+      }
+      if (e.key === 'token') {
+        // token changed in another tab. Re-read and update state.
+        const t = storage.get('token', null);
+        if (!t) {
+          doLogout(true);
+          return;
+        }
+        const p = parseJwt(t);
+        if (!p || !p.exp) {
+          doLogout(true);
+          return;
+        }
+        setJwtUser(p);
+        setIsAuthenticated(true);
+        scheduleLogout(p.exp * 1000);
+      }
+    }
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [doLogout, scheduleLogout]);
 
   // Private route wrapper for role-based guard
   const PrivateRoute = ({ element, roles }) => {
@@ -112,40 +173,17 @@ export default function App() {
       <Navbar isAuthenticated={isAuthenticated} user={user} onLogout={handleLogout} />
       <Routes>
         <Route path="/" element={<HomePage isAuthenticated={isAuthenticated} user={user} />} />
-        <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
         {/* Existing list page (kept) */}
         <Route path="/books" element={<ViewBooksPage />} />
 
-        {/* NEW advanced search page */}
-        <Route path="/search" element={<SearchPage />} />
-
-        {/* Borrowed (role: reader/staff/admin) */}
-        <Route
-          path="/borrowed"
-          element={
-            <PrivateRoute
-              element={<BorrowedBooks />}
-              roles={['reader', 'staff', 'admin']}
-            />
-          }
-        />
-
-        {/* Admin */}
-        <Route
-          path="/admin"
-          element={
-            <PrivateRoute
-              element={<AdminDashboard />}
-              roles={['staff', 'admin']}
-            />
-          }
-        />
-          <Route
-            path="/settings"
-            element={ <PrivateRoute element={<SettingsPage />} roles={['reader', 'staff', 'admin']} /> }
-          />
+        {/* Protected pages */}
+        <Route path="/borrowed" element={<PrivateRoute element={<BorrowedBooks />} roles={['reader','staff','admin']} />} />
+        <Route path="/admin" element={<PrivateRoute element={<AdminDashboard />} roles={['staff','admin']} />} />
+        <Route path="/search" element={<PrivateRoute element={<SearchPage />} roles={['reader','staff','admin']} />} />
+        <Route path="/settings" element={<PrivateRoute element={<SettingsPage />} roles={['reader','staff','admin']} />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
