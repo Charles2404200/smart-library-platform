@@ -226,13 +226,14 @@ export default function App() {
 
   const PrivateRoute = ({ element, roles }) => {
     if (!isAuthenticated) return <Navigate to="/login" replace />;
-    if (roles?.length) {
-      const role = user?.role;
-      if (!roles.includes(role)) return <Navigate to="/" replace />;
-    }
-    return element;
+  if (!user) {
+    return null; 
+  }
+  if (roles?.length && !roles.includes(user.role)) {
+    return <Navigate to="/" replace />;
   };
-
+  return element;
+};
   return (
     <Router>
       <Navbar isAuthenticated={isAuthenticated} user={user} onLogout={handleLogout} />
