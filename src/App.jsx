@@ -12,6 +12,9 @@ import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
 import BorrowedBooks from './pages/BorrowedBooks/BorrowedBooks';
 import SearchPage from './pages/SearchPage/SearchPage';
 import SettingsPage from './pages/SettingsPage';
+import ReaderPage from './pages/Reader/ReaderPage';
+import MyLibrary from './pages/MyLibrary/MyLibrary';
+
 // Shared
 import Navbar from './components/navbar/Navbar';
 import { storage } from './utils/storage';
@@ -241,13 +244,47 @@ export default function App() {
         <Route path="/" element={<HomePage isAuthenticated={isAuthenticated} user={user} />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-
         <Route path="/books" element={<ViewBooksPage />} />
-        <Route path="/borrowed" element={<PrivateRoute element={<BorrowedBooks />} roles={['reader','staff','admin']} />} />
-        <Route path="/admin" element={<PrivateRoute element={<AdminDashboard />} roles={['staff','admin']} />} />
-        <Route path="/search" element={<PrivateRoute element={<SearchPage />} roles={['reader','staff','admin']} />} />
-        <Route path="/settings" element={<PrivateRoute element={<SettingsPage />} roles={['reader','staff','admin']} />} />
+        <Route path="/search" element={<SearchPage />} />
+        <Route path="/read/:bookId" element={<ReaderPage />} />
+        
+        <Route
+  path="/my-library"
+  element={
+    <PrivateRoute
+      element={<MyLibrary />}
+      roles={['reader', 'staff', 'admin']}
+    />
+  }
+/>
 
+        {/* Borrowed (role: reader/staff/admin) */}
+        <Route
+          path="/borrowed"
+          element={
+            <PrivateRoute
+              element={<BorrowedBooks />}
+              roles={['reader', 'staff', 'admin']}
+            />
+          }
+        />
+
+        {/* Admin */}
+        <Route
+          path="/admin"
+          element={
+            <PrivateRoute
+              element={<AdminDashboard />}
+              roles={['staff', 'admin']}
+            />
+          }
+        />
+          <Route
+            path="/settings"
+            element={ <PrivateRoute element={<SettingsPage />} roles={['reader', 'staff', 'admin']} /> }
+          />
+
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
