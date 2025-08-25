@@ -2,8 +2,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const DEFAULT_COVER = '/default-cover.png'; // fallback cover (adjust path as needed)
-
 export default function BookCard({ book, onBorrow, onReviews, onReview }) {
   const navigate = useNavigate();
   const avail = book.available_copies ?? book.copies;
@@ -17,23 +15,16 @@ export default function BookCard({ book, onBorrow, onReviews, onReview }) {
   const full = Math.round(avg);
   const stars = Array.from({ length: 5 }, (_, i) => (i < full ? '★' : '☆')).join('');
 
-  // Safe image fallback
-  const imageUrl = book.cover_url || book.image || DEFAULT_COVER;
-
   return (
-    <div className="bg-white p-4 border rounded-lg shadow hover:shadow-md transition flex flex-col">
-      <div className="h-64 w-full flex justify-center items-center mb-3">
+    <div className="bg-white p-4 border rounded-lg shadow hover:shadow-md transition">
+      {book.image_url && (
         <img
-          src={imageUrl}
+          src={book.full_image_url || book.image_url}
           alt={book.title}
-          className="max-h-full w-auto object-contain rounded-md"
-          onError={(e) => {
-            e.currentTarget.src = DEFAULT_COVER;
-          }}
+          className="w-full h-40 object-cover rounded-md mb-3"
         />
-      </div>
+      )}
 
-      {/* Title + Status */}
       <div className="flex items-start justify-between gap-2">
         <h2 className="text-xl font-semibold text-indigo-600">{book.title}</h2>
         <span
@@ -45,7 +36,6 @@ export default function BookCard({ book, onBorrow, onReviews, onReview }) {
         </span>
       </div>
 
-      {/* Ratings */}
       <div className="mt-1 mb-2 text-sm">
         <span className="text-amber-500 align-middle">{stars}</span>
         <span className="ml-2 text-gray-600 align-middle">
@@ -53,7 +43,6 @@ export default function BookCard({ book, onBorrow, onReviews, onReview }) {
         </span>
       </div>
 
-      {/* Book details */}
       <p className="text-gray-700 mb-1">📚 Author(s): {book.authors || '—'}</p>
       <p className="text-gray-600 text-sm">🏢 Publisher: {book.publisher || '—'}</p>
       <p className="text-gray-600 text-sm">🏷 Genre: {book.genre || '—'}</p>
@@ -62,24 +51,15 @@ export default function BookCard({ book, onBorrow, onReviews, onReview }) {
         📦 Available / Total: {avail} / {book.copies}
       </p>
 
-      {/* Action buttons */}
       <div className="mt-3 flex flex-wrap gap-2">
         <button
           className={`px-4 py-2 text-white rounded ${
             isRetired
               ? 'bg-gray-400 cursor-not-allowed'
-              : avail > 0
-              ? 'bg-indigo-600 hover:bg-indigo-700'
-              : 'bg-gray-400 cursor-not-allowed'
+              : (avail > 0 ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed')
           }`}
           disabled={isRetired || avail <= 0}
-          title={
-            isRetired
-              ? 'This book has been retired by library staff.'
-              : avail <= 0
-              ? 'No copies available right now.'
-              : ''
-          }
+          title={isRetired ? 'This book has been retired by library staff.' : (avail <= 0 ? 'No copies available right now.' : '')}
           onClick={() => !isRetired && avail > 0 && onBorrow && onBorrow(book)}
         >
           {isRetired ? 'Retired' : avail > 0 ? 'Borrow' : 'Out of stock'}
