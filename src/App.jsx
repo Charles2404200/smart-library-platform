@@ -17,7 +17,7 @@ import SettingsPage from './pages/SettingsPage';
 import Navbar from './components/navbar/Navbar';
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'));
   const [jwtUser, setJwtUser] = useState(null);         // decoded token (id,email,role)
   const [profileUser, setProfileUser] = useState(null); // user object saved at login
 
@@ -100,13 +100,14 @@ export default function App() {
   // Private route wrapper for role-based guard
   const PrivateRoute = ({ element, roles }) => {
     if (!isAuthenticated) return <Navigate to="/login" replace />;
-    if (roles?.length) {
-      const role = user?.role;
-      if (!roles.includes(role)) return <Navigate to="/" replace />;
-    }
-    return element;
+  if (!user) {
+    return null; 
+  }
+  if (roles?.length && !roles.includes(user.role)) {
+    return <Navigate to="/" replace />;
   };
-
+  return element;
+};
   return (
     <Router>
       <Navbar isAuthenticated={isAuthenticated} user={user} onLogout={handleLogout} />
