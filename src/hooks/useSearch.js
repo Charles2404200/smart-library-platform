@@ -4,7 +4,12 @@ import { searchBooksAdvanced } from '../services/booksService';
 import { ReviewsAPI } from '../services/reviews';
 import { API_URL } from '../config/env';
 
-export function useSearch(initialFilters = { title: '', author: '', genre: '', publisher: '' }) {
+/**
+ * useSearch hook
+ * Modified: By default we DO NOT hydrate aggregates (reviews/avg) automatically to avoid many API calls.
+ * If you want to fetch aggregates for visible results, call the returned `hydrateAggregates` function manually.
+ */
+export function useSearch(initialFilters = { title: '', author: '', genre: '', publisher: '' }, options = { autoHydrate: false }) {
   const [filters, setFilters] = useState(initialFilters);
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -13,10 +18,7 @@ export function useSearch(initialFilters = { title: '', author: '', genre: '', p
   const normalizeBook = useCallback((b) => {
     const id = b.id ?? b.book_id;
     const image = b?.image_url ?? b?.image;
-    const fullImg = image
-      ? (image.startsWith('http') ? image : `${API_URL}${image.startsWith('/') ? '' : '/'}${image}`)
-      : undefined;
-
+    const fullImg = image && image.startsWith('http') ? image : (image ? `${API_URL}/${image}` : null);
     return {
       ...b,
       id,
@@ -27,17 +29,15 @@ export function useSearch(initialFilters = { title: '', author: '', genre: '', p
     };
   }, []);
 
-  const hydrateAggregates = useCallback(async (list) => {
+  async function hydrateAggregates(list) {
+    // Fetch review aggregates only for given list of books (useful on-demand)
     const targets = list.filter((b) => (Number(b.avg_rating ?? 0) === 0 && Number(b.reviews_count ?? 0) === 0));
     if (targets.length === 0) return;
 
     const chunkSize = 6;
     for (let i = 0; i < targets.length; i += chunkSize) {
       const slice = targets.slice(i, i + chunkSize);
-      const results = await Promise.allSettled(
-        slice.map((b) => ReviewsAPI.list(Number(b.id ?? b.book_id)))
-      );
-
+      const results = await Promise.allSettled(slice.map((b) => ReviewsAPI.list(Number(b.id ?? b.book_id))));
       setBooks((prev) => {
         const map = new Map(prev.map((x) => [Number(x.id ?? x.book_id), { ...x }]));
         slice.forEach((b, idx) => {
@@ -55,51 +55,44 @@ export function useSearch(initialFilters = { title: '', author: '', genre: '', p
         return Array.from(map.values());
       });
     }
-  }, []);
+  }
 
   const handleSearch = useCallback(async (opts = {}) => {
-    // ensure safe trimming and do not mix ?? with || (avoid syntax pitfalls)
+    // ensure safe trimming
     const payload = {
       title: (opts.title ?? filters.title ?? '').trim(),
       author: (opts.author ?? filters.author ?? '').trim(),
       genre: (opts.genre ?? filters.genre ?? '').trim(),
       publisher: (opts.publisher ?? filters.publisher ?? '').trim(),
+      q: (opts.q ?? '').trim(),
       page: opts.page ?? 1,
-      pageSize: opts.pageSize ?? 48,
+      pageSize: opts.pageSize ?? 24,
     };
 
     setLoading(true);
     setBorrowStatus(null);
 
     try {
-      // Debug: show outgoing payload
-      if (typeof window !== 'undefined' && window.console) {
-        console.debug('[useSearch] searching with', payload);
-      }
-
       const data = await searchBooksAdvanced(payload);
-
-      // Backend may return array or object; normalize both
-      const rows = Array.isArray(data) ? data : (data?.books || data?.rows || []);
+      const rows = Array.isArray(data) ? data : data?.books || data?.rows || [];
       const normalized = rows.map(normalizeBook);
-
       setBooks(normalized);
 
-      // Hydrate aggregates in background but we still await starting it (no blocking)
-      hydrateAggregates(normalized);
+      // Do NOT automatically hydrate aggregates unless options.autoHydrate is true.
+      if (options && options.autoHydrate) {
+        hydrateAggregates(normalized);
+      }
 
       return normalized;
     } catch (err) {
-      // Robust handling: show an error in console and clear books to indicate failure
       console.error('[useSearch] Search failed:', err);
       setBooks([]);
-      // Optionally surface the error to UI via borrowStatus or other mechanism
       setBorrowStatus(typeof err?.message === 'string' ? `Search failed: ${err.message}` : 'Search failed');
       return [];
     } finally {
       setLoading(false);
     }
-  }, [filters, normalizeBook, hydrateAggregates]);
+  }, [filters, normalizeBook, hydrateAggregates, options]);
 
   return {
     filters,
@@ -110,6 +103,7 @@ export function useSearch(initialFilters = { title: '', author: '', genre: '', p
     borrowStatus,
     setBorrowStatus,
     handleSearch,
+    hydrateAggregates, // expose for on-demand use
   };
 }
 
