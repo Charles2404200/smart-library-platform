@@ -2,12 +2,18 @@
 import { API_URL } from '../config/env';
 import { storage } from '../utils/storage';
 
-/**
- * Lightweight fetch wrapper used across the app.
- * - Safely reads token from localStorage (handles raw string or JSON string).
- * - If server responds with 401, perform client-side logout (clear token + user)
- *   and broadcast logout to other tabs by updating localStorage key 'logout'.
- */
+function normalizeStoredToken(raw) {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed === 'string') return parsed;
+    if (parsed && typeof parsed.token === 'string') return parsed.token;
+    return typeof raw === 'string' ? raw : null;
+  } catch (e) {
+    return typeof raw === 'string' ? raw : null;
+  }
+}
+
 export async function http(path, { method = 'GET', body, token, headers } = {}) {
   const url = `${API_URL}${path.startsWith('/') ? '' : '/'}${path}`;
   const opts = {
@@ -18,43 +24,47 @@ export async function http(path, { method = 'GET', body, token, headers } = {}) 
     },
   };
 
-  // Safely obtain JWT: handle raw string or JSON-encoded token
   let jwt = token;
   if (!jwt) {
     const stored = typeof window !== 'undefined' ? storage.get('token', null) : null;
-    if (stored) {
-      jwt = stored;
-    } else {
-      jwt = null;
-    }
+    jwt = normalizeStoredToken(stored);
   }
 
   if (jwt) {
     opts.headers.Authorization = `Bearer ${jwt}`;
   }
 
-  // Only attach a body for non-GET methods or when explicitly provided and allowed.
   if (body !== undefined && method.toUpperCase() !== 'GET') {
     opts.body = JSON.stringify(body);
   }
+
+  console.log('[http] Request', opts.method, url, 'hasToken?', !!jwt);
 
   const res = await fetch(url, opts);
   const ct = res.headers.get('content-type') || '';
   const data = ct.includes('application/json') ? await res.json() : await res.text();
 
   if (!res.ok) {
-    // If 401 Unauthorized, force client-side logout to ensure expired tokens don't keep user logged in.
     if (res.status === 401) {
+      console.warn('[http] 401 Unauthorized detected for', url);
       try {
-        // Clear token & user from storage
         storage.remove('token');
         storage.remove('user');
-        // Broadcast logout to other tabs/windows
-        try { localStorage.setItem('logout', Date.now().toString()); } catch (e) { /* ignore */ }
-      } catch (e) { /* ignore */ }
+        console.log('[http] Cleared token and user from storage due to 401');
+        try { localStorage.setItem('logout', Date.now().toString()); console.log('[http] Broadcast logout via localStorage'); } catch (e) {}
+        try {
+          if (typeof window !== 'undefined' && typeof window.__appLogout === 'function') {
+            console.log('[http] calling window.__appLogout() to ensure same-tab React state updates');
+            window.__appLogout();
+          }
+        } catch (e) {
+          console.error('[http] error calling window.__appLogout', e);
+        }
+      } catch (e) {
+        console.error('[http] error handling 401', e);
+      }
     }
 
-    // Build a helpful message
     const msg = (typeof data === 'string' && data) || data?.error || data?.message || `HTTP ${res.status}`;
     const err = new Error(msg);
     err.status = res.status;
@@ -64,3 +74,30 @@ export async function http(path, { method = 'GET', body, token, headers } = {}) 
 
   return data;
 }
+
+/**
+ * silentRefresh - call /api/auth/refresh with credentials: 'include' so httpOnly refresh cookie is sent.
+ * Returns accessToken string on success, or null on failure.
+ */
+export async function silentRefresh() {
+  const refreshUrl = `${API_URL}/api/auth/refresh`;
+  try {
+    const res = await fetch(refreshUrl, {
+      method: 'POST',
+      credentials: 'include', // important for httpOnly cookie refresh tokens
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      console.warn('[http] silentRefresh failed', res.status);
+      return null;
+    }
+    const data = await res.json();
+    const token = data?.accessToken || data?.token || null;
+    return token;
+  } catch (e) {
+    console.error('[http] silentRefresh error', e);
+    return null;
+  }
+}
+
+export default http;
