@@ -7,13 +7,12 @@ import { defineConfig, globalIgnores } from 'eslint/config';
 export default defineConfig([
   globalIgnores(['dist']),
 
-  // ✅ Cấu hình cho backend: Node.js
   {
-    files: ['backend/**/*.js'], // áp dụng với mọi file JS trong backend
+    files: ['backend/**/*.js'],
     languageOptions: {
       ecmaVersion: 2020,
       globals: {
-        ...globals.node, // thêm biến toàn cục Node như `process`, `require`
+        ...globals.node,
       },
       parserOptions: {
         ecmaVersion: 'latest',
@@ -25,9 +24,9 @@ export default defineConfig([
     },
   },
 
-  // ✅ Cấu hình cho frontend: React
+
   {
-    files: ['src/**/*.{js,jsx}'], // frontend Vite React
+    files: ['src/**/*.{js,jsx}'],
     extends: [
       js.configs.recommended,
       reactHooks.configs['recommended-latest'],

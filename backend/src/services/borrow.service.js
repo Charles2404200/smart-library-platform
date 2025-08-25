@@ -24,12 +24,12 @@ async function returnBook(db, checkoutId) {
 async function getMyBorrows(db, userId) {
   const [rows] = await db.query(
     `SELECT
-       c.id AS checkoutId,
+       c.id       AS checkoutId,
+       c.bookId   AS bookId,       -- 👈 add this line
        b.title,
        c.checkoutAt,
        c.dueAt,
        c.returnAt,
-       -- overdue = has due date, not returned, and now is past due
        (c.returnAt IS NULL AND c.dueAt IS NOT NULL AND NOW() > c.dueAt) AS overdue,
        c.isLate
      FROM checkout c
