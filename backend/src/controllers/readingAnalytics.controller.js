@@ -1,9 +1,49 @@
-const S = require('../services/readingAnalytics.service');
+const {
+  reportAvgSessionTimePerUser,
+  reportMostHighlightedBooks,
+  reportTopBooksByTotalReadingTime
+} = require('../services/readingAnalytics.service');
 
-const win = (req)=>({ from:req.query.from?new Date(req.query.from):undefined, to:req.query.to?new Date(req.query.to):undefined });
+function parseRange(q) {
+  const from = q.from ? new Date(q.from) : undefined;
+  const to   = q.to   ? new Date(q.to)   : undefined;
+  return { from, to };
+}
 
-async function avgSessionTimePerUser(req,res){ try{ res.json(await S.reportAvgSessionTimePerUser(win(req))); }catch(e){ res.status(500).json({error:'report failed'})}}
-async function mostHighlightedBooks(req,res){ try{ res.json(await S.reportMostHighlightedBooks({ ...win(req), limit:Number(req.query.limit)||10 })); }catch(e){ res.status(500).json({error:'report failed'})}}
-async function topBooksByTotalReadingTime(req,res){ try{ res.json(await S.reportTopBooksByTotalReadingTime({ ...win(req), limit:Number(req.query.limit)||10 })); }catch(e){ res.status(500).json({error:'report failed'})}}
+async function getAvgSessionTimePerUser(req, res) {
+  try {
+    const data = await reportAvgSessionTimePerUser(parseRange(req.query));
+    res.json({ data });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'failed to compute average session time' });
+  }
+}
 
-module.exports = { avgSessionTimePerUser, mostHighlightedBooks, topBooksByTotalReadingTime };
+async function getMostHighlightedBooks(req, res) {
+  try {
+    const { limit } = req.query;
+    const data = await reportMostHighlightedBooks({ ...parseRange(req.query), limit: Number(limit || 10) });
+    res.json({ data });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'failed to compute highlighted books' });
+  }
+}
+
+async function getTopBooksByTotalTime(req, res) {
+  try {
+    const { limit } = req.query;
+    const data = await reportTopBooksByTotalReadingTime({ ...parseRange(req.query), limit: Number(limit || 10) });
+    res.json({ data });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'failed to compute top reading time' });
+  }
+}
+
+module.exports = {
+  getAvgSessionTimePerUser,
+  getMostHighlightedBooks,
+  getTopBooksByTotalTime,
+};

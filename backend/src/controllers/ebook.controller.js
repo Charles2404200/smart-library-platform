@@ -1,8 +1,11 @@
 const fs = require('fs');
 const path = require('path');
 const { ObjectId } = require('mongodb');
-const { startReadingSession, appendReadingActivity, endReadingSession } =
-  require('../services/readingAnalytics.service');
+const {
+  startReadingSession,
+  appendReadingActivity,
+  endReadingSession
+} = require('../services/readingAnalytics.service');
 const { hasActiveBorrow, fetchBookFilePath } = require('../services/ebook.guard');
 const { signReaderToken, verifyReaderToken } = require('../utils/readerToken');
 
@@ -32,8 +35,6 @@ async function streamEbook(req, res) {
   const bookId = Number(req.params.bookId);
   const payload = req.query.token && verifyReaderToken(String(req.query.token));
   if (!payload || Number(payload.bid) !== bookId) return res.status(401).json({ error: 'Invalid/expired token' });
-
-  // (optional defense-in-depth)
   if (!(await hasActiveBorrow(db, payload.uid, bookId))) return res.status(403).json({ error: 'Borrow required' });
 
   const filePath = await fetchBookFilePath(db, bookId);
@@ -68,28 +69,34 @@ async function streamEbook(req, res) {
   fs.createReadStream(abs, { start, end }).pipe(res);
 }
 
+// beacon endpoints
 async function postProgress(req, res) {
   try {
-    const { sessionId, page } = req.body || {};
+    const { sessionId, page, pagePercent, cfi } = req.body || {};
     if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
-    await appendReadingActivity(new ObjectId(String(sessionId)), { pagesRead: [Number(page)] });
+    const pagesRead = Number.isFinite(Number(page)) ? [Number(page)] : [];
+    await appendReadingActivity(new ObjectId(String(sessionId)), { pagesRead, pagePercent, cfi });
     res.json({ ok: true });
   } catch (e) {
     console.error('progress error', e);
     res.status(500).json({ error: 'progress failed' });
   }
 }
+
 async function postHighlight(req, res) {
   try {
     const { sessionId, page, text, color } = req.body || {};
     if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
-    await appendReadingActivity(new ObjectId(String(sessionId)), { highlights: [{ page: Number(page), text: String(text||''), color: color ?? null }] });
+    await appendReadingActivity(new ObjectId(String(sessionId)), {
+      highlights: [{ page: Number(page), text: String(text||''), color: color ?? null }]
+    });
     res.json({ ok: true });
   } catch (e) {
     console.error('highlight error', e);
     res.status(500).json({ error: 'highlight failed' });
   }
 }
+
 async function postEnd(req, res) {
   try {
     const { sessionId } = req.body || {};

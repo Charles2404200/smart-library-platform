@@ -83,7 +83,7 @@ app.use('/api/users',   require('./routes/user.routes'));
 app.use('/api/books',   require('./routes/book.routes'));
 app.use('/api/borrow',  require('./routes/borrow.routes'));
 app.use('/api/reviews', require('./routes/review.routes'));
-app.use('/api/analytics', require('./routes/analytics.routes'));
+app.use('/api/analytics', require('./routes/readingAnalytics.routes'));
 app.use('/api/admin',   require('./routes/admin.routes'));
 app.use('/api/review',  require('./routes/review.routes'));
 
