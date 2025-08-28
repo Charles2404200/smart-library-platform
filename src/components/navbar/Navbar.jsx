@@ -42,18 +42,7 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
 
           {/* Desktop search box */}
           <form onSubmit={submitSearch} className="flex items-center">
-            <input
-              value={term}
-              onChange={(e) => setTerm(e.target.value)}
-              placeholder="Search title, author, genre…"
-              className="border rounded-l-md px-3 py-1.5 w-64"
-            />
-            <button
-              type="submit"
-              className="px-3 py-1.5 bg-indigo-600 text-white rounded-r-md hover:bg-indigo-700"
-            >
-              Search
-            </button>
+           
 
             {/* Advanced search shortcut button */}
             <button
