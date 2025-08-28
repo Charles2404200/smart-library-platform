@@ -6,6 +6,7 @@ import BooksTable from '../../components/admin/BooksTable';
 import StaffLogsTable from '../../components/admin/StaffLogsTable';
 import UsersTable from '../../components/admin/UsersTable';
 import * as adminApi from '../../services/adminService';
+import AdminAnalytics from '../../components/admin/AdminAnalytics';
 
 export default function AdminDashboard() {
   const [books, setBooks] = useState([]);
@@ -179,7 +180,7 @@ export default function AdminDashboard() {
     <div className="p-8 max-w-7xl mx-auto space-y-10">
       <h1 className="text-3xl font-bold text-indigo-700">🛠 Admin Panel</h1>
 
-      {/* ADMIN REPORTS: inserted above AddBookForm as requested */}
+      <AdminAnalytics />
       <AdminReports />
 
       <AddBookForm onSubmit={onAddBook} adding={adding} />

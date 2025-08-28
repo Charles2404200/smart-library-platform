@@ -5,27 +5,49 @@ import { API_URL } from '../config/env';
 function getToken() {
   const stored = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   if (!stored) return null;
-  try {
-    return JSON.parse(stored); // if it was saved like '"eyJ..."'
-  } catch {
-    return stored; // normal raw token 'eyJ...'
-  }
+  try { return JSON.parse(stored); } catch { return stored; }
 }
 
-/** Open/start a reading session for a given bookId (must be actively borrowed) */
-export async function openEbook(bookId) {
-  if (!Number.isFinite(Number(bookId)) || Number(bookId) <= 0) {
-    throw new Error('Invalid bookId');
-  }
-
+/** Minimal keepalive POST with auth (used by progress/highlight/end) */
+async function postKeepalive(url, jsonBody) {
   const token = getToken();
-  const res = await fetch(`${API_URL}/api/ebooks/${bookId}/open`, {
+  const init = {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    credentials: 'include', // safe with your CORS config
+    body: JSON.stringify(jsonBody || {}),
+    keepalive: true,
+    credentials: 'include',
+  };
+
+  // Fire-and-forget but do a single quick retry for flaky networks
+  try {
+    const res = await fetch(url, init);
+    if (!res.ok && res.status >= 500) {
+      // one small backoff retry (non-blocking)
+      setTimeout(() => { fetch(url, init).catch(() => {}); }, 200);
+    }
+  } catch {
+    // last resort retry
+    setTimeout(() => { fetch(url, init).catch(() => {}); }, 200);
+  }
+}
+
+/** Open/start a reading session for a given bookId (must be actively borrowed) */
+export async function openEbook(bookId) {
+  const id = Number(bookId);
+  if (!Number.isFinite(id) || id <= 0) throw new Error('Invalid bookId');
+
+  const token = getToken();
+  const res = await fetch(`${API_URL}/api/ebooks/${id}/open`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    credentials: 'include',
   });
 
   const ct = res.headers.get('content-type') || '';
@@ -36,7 +58,7 @@ export async function openEbook(bookId) {
     throw new Error(msg);
   }
 
-  // { sessionId, fileUrl }
+  // BE returns { sessionId, token, fileUrl }
   return data;
 }
 
@@ -44,58 +66,40 @@ export async function openEbook(bookId) {
 export const startSession = openEbook;
 
 /**
- * Send reading progress. Uses fetch keepalive so it can fire during unload
- * and still include the Authorization header (sendBeacon cannot set headers).
- *
- * @param {number} bookId
- * @param {string} sessionId
- * @param {{ pagePercent?: number, cfi?: string, page?: number }} payload
+ * Send reading progress with optional fields:
+ *  - pagePercent: number (0..100)
+ *  - cfi: string (epub location)
+ *  - page: number (optional discrete page marker)
  */
 export function beaconProgress(bookId, sessionId, payload = {}) {
-  try {
-    const token = getToken();
-    const body = JSON.stringify({ sessionId, ...payload });
+  const id = Number(bookId);
+  if (!sessionId || !Number.isFinite(id) || id <= 0) return;
 
-    // Fire-and-forget; don't await.
-    fetch(`${API_URL}/api/ebooks/${bookId}/progress`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body,
-      keepalive: true,
-      credentials: 'include',
-    }).catch(() => {});
-  } catch (e) {
-    // non-fatal
-    console.error('Progress send failed:', e);
-  }
+  const body = { sessionId };
+  if (typeof payload.pagePercent === 'number') body.pagePercent = payload.pagePercent;
+  if (typeof payload.cfi === 'string') body.cfi = payload.cfi;
+  if (Number.isFinite(Number(payload.page))) body.page = Number(payload.page);
+
+  postKeepalive(`${API_URL}/api/ebooks/${id}/progress`, body);
 }
 
-/**
- * End a reading session (also keepalive so it succeeds during navigation/unload).
- *
- * @param {number} bookId
- * @param {string} sessionId
- */
-export function beaconEnd(bookId, sessionId) {
-  try {
-    const token = getToken();
-    const body = JSON.stringify({ sessionId });
+/** Add a highlight (page, text, color?) */
+export function beaconHighlight(bookId, sessionId, { page, text, color } = {}) {
+  const id = Number(bookId);
+  if (!sessionId || !Number.isFinite(id) || id <= 0) return;
+  if (!Number.isFinite(Number(page))) return; // need a page to store highlight
 
-    fetch(`${API_URL}/api/ebooks/${bookId}/end`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body,
-      keepalive: true,
-      credentials: 'include',
-    }).catch(() => {});
-  } catch (e) {
-    // non-fatal
-    console.error('End send failed:', e);
-  }
+  postKeepalive(`${API_URL}/api/ebooks/${id}/highlight`, {
+    sessionId,
+    page: Number(page),
+    text: String(text || ''),
+    color: color ?? null,
+  });
+}
+
+/** End a reading session (keepalive so it succeeds during navigation/unload) */
+export function beaconEnd(bookId, sessionId) {
+  const id = Number(bookId);
+  if (!sessionId || !Number.isFinite(id) || id <= 0) return;
+  postKeepalive(`${API_URL}/api/ebooks/${id}/end`, { sessionId });
 }
