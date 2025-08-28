@@ -1,23 +1,5 @@
 import React from 'react';
 
-/**
- * BorrowModal
- *
- * Props:
- *  - open: boolean
- *  - book: object (book currently selected)
- *  - borrowAt: string | null  (ISO date or '' expected)
- *  - dueAt: string | null
- *  - setBorrowAt: function
- *  - setDueAt: function
- *  - onClose: function
- *  - onSubmit: function  (called when user confirms borrow; parent handles the actual API call)
- *  - status: string | null (status messages to display)
- *
- * Notes:
- *  - inputs are controlled and never receive `null` as value; use empty string fallback.
- *  - onSubmit is called with no args (matches your ViewBooks implementation).
- */
 export default function BorrowModal({
   open,
   book,
@@ -31,85 +13,42 @@ export default function BorrowModal({
 }) {
   if (!open || !book) return null;
 
-  // Ensure controlled input values are strings (never `null`)
-  const borrowVal = borrowAt ?? '';
-  const dueVal = dueAt ?? '';
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    // Basic validation: ensure dates present (you can add more rules if desired)
-    if (!borrowVal || !dueVal) {
-      // If parent expects to receive this via status prop, parent can set it.
-      // Here we do a simple alert to give immediate feedback.
-      // Optionally you can call a parent callback to set status; we keep simple.
-      // But we avoid throwing or returning null.
-      // You can also setStatus via parent by calling a passed-in setter.
-      // For now, call onSubmit anyway; parent can check values in its state.
-      return onSubmit && onSubmit();
-    }
-    return onSubmit && onSubmit();
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* backdrop */}
-      <div
-        className="absolute inset-0 bg-black opacity-40"
-        onClick={onClose}
-        aria-hidden="true"
-      />
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+        <h3 className="text-lg font-semibold mb-2">Borrow “{book.title}”</h3>
 
-      <div className="relative z-10 max-w-xl w-full bg-white rounded shadow-lg p-6">
-        <div className="flex items-start justify-between">
-          <h2 className="text-lg font-semibold">Borrow "{book.title}"</h2>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="text-gray-500 hover:text-gray-700"
-          >
-            ✕
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <form onSubmit={onSubmit} className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Borrow date
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Borrow at</label>
             <input
-              type="date"
-              value={borrowVal}
+              type="datetime-local"
+              className="border rounded p-2 w-full"
+              value={borrowAt}
               onChange={(e) => setBorrowAt(e.target.value)}
-              className="mt-1 block w-full rounded border px-3 py-2"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Due date
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Return due</label>
             <input
-              type="date"
-              value={dueVal}
+              type="datetime-local"
+              className="border rounded p-2 w-full"
+              value={dueAt}
               onChange={(e) => setDueAt(e.target.value)}
-              className="mt-1 block w-full rounded border px-3 py-2"
               required
             />
+            <p className="text-xs text-gray-500 mt-1">
+              We’ll warn you if the due date passes before you return it.
+            </p>
           </div>
 
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded border hover:bg-gray-50"
-            >
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" className="px-4 py-2 rounded border" onClick={onClose}>
               Cancel
             </button>
-            <button
-              type="submit"
-              className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white"
-            >
+            <button type="submit" className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white">
               Confirm Borrow
             </button>
           </div>
