@@ -1,6 +1,15 @@
+// src/components/admin/UsersTable.jsx
 import React from 'react';
 
-export default function UsersTable({ users, loading, onChangeRole }) {
+/**
+ * UsersTable
+ * Props:
+ *  - users: Array<User>
+ *  - loading: boolean
+ *
+ * NOTE: Role-changing UI has been removed per request.
+ */
+export default function UsersTable({ users = [], loading = false /* onChangeRole */ }) {
   return (
     <div className="bg-white border rounded-xl shadow p-5">
       <h2 className="text-xl font-semibold mb-4">👥 Users</h2>
@@ -17,26 +26,18 @@ export default function UsersTable({ users, loading, onChangeRole }) {
                 <th className="px-3 py-2 text-left">Name</th>
                 <th className="px-3 py-2 text-left">Email</th>
                 <th className="px-3 py-2 text-left">Role</th>
-                <th className="px-3 py-2 text-left">Change Role</th>
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id} className="border-t">
-                  <td className="px-3 py-2">{u.id}</td>
+                <tr key={u.id ?? u._id} className="border-t align-top">
+                  <td className="px-3 py-2">{u.id ?? u._id}</td>
                   <td className="px-3 py-2">{u.name}</td>
                   <td className="px-3 py-2">{u.email}</td>
-                  <td className="px-3 py-2">{u.role}</td>
                   <td className="px-3 py-2">
-                    <select
-                      className="border rounded px-2 py-1"
-                      defaultValue={u.role}
-                      onChange={(e) => onChangeRole(u.id, e.target.value)}
-                    >
-                      <option value="reader">reader</option>
-                      <option value="staff">staff</option>
-                      <option value="admin">admin</option>
-                    </select>
+                    <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs capitalize">
+                      {u.role}
+                    </span>
                   </td>
                 </tr>
               ))}

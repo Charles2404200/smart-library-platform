@@ -1,196 +1,192 @@
-// ===================== ViewBooks.jsx (UPDATED) =====================
-// Drop-in replacement for: src/pages/ViewBooks/ViewBooks.jsx
+// src/pages/ViewBooks/ViewBooks.jsx
+import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { getBooks, searchBooks as searchBooksAPI, getAvailability } from '../../services/booksService';
+import { borrowBook } from '../../services/borrowService';
+import BooksGrid from '../../components/books/BooksGrid';
+import BorrowModal from '../../components/books/BorrowModal';
+import ReviewsModal from '../../components/reviews/ReviewsModal';
 
-import React, { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { getBooks, searchBooks as searchBooksAPI, getAvailability } from "../../services/booksService";
-import { borrowBook } from "../../services/borrowService";
-import BooksGrid from "../../components/books/BooksGrid";
-import BorrowModal from "../../components/books/BorrowModal";
-import ReviewsModal from "../../components/reviews/ReviewsModal";
+const DEFAULT_LOAN_DAYS = 14;
 
-export default function ViewBooksPage({ isAuthenticated = false, currentUser = null }) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [q, setQ] = useState(searchParams.get('q') || '');
-  const [activeQuery, setActiveQuery] = useState('');
-  const [page, setPage] = useState(1);
-  const PAGE_SIZE = 24;
-  const [hasSearched, setHasSearched] = useState(false);
+function formatDateISO(d) {
+  const date = d instanceof Date ? d : new Date(d);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
-  // state
+// --- Auth from localStorage ---
+const tokenRaw = localStorage.getItem('token');
+let token = null;
+try {
+  const parsed = JSON.parse(tokenRaw);
+  token = typeof parsed === 'string' ? parsed : (parsed && parsed.token) ? parsed.token : tokenRaw;
+} catch { token = tokenRaw; }
+const isAuthenticated = !!token;
+let currentUser = null;
+if (isAuthenticated && typeof token === 'string' && token.includes('.')) {
+  try { const payload = JSON.parse(atob(token.split('.')[1])); currentUser = payload?.user ?? payload ?? null; } catch {}
+}
+
+export default function ViewBooksPage() {
+  const [searchParams] = useSearchParams();
+  const q = searchParams.get('q') || '';
+
   const [books, setBooks] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [error, setError] = useState(null);
 
-  // borrow modal state
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(24);
+  const [total, setTotal] = useState(0);
+
+  // Borrow
   const [borrowOpen, setBorrowOpen] = useState(false);
   const [selectedBook, setSelectedBook] = useState(null);
   const [borrowAt, setBorrowAt] = useState(null);
   const [dueAt, setDueAt] = useState(null);
   const [borrowStatus, setBorrowStatus] = useState(null);
 
-  // reviews modal
+  // Reviews
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewBook, setReviewBook] = useState(null);
 
-  // normalize book shapes from different backends
-  function normalizeBook(b) {
-    return b;
-  }
-
-  async function loadPage(p = 1) {
-    setLoading(true);
-    setError(null);
-    try {
-      let data;
-      if (activeQuery && activeQuery.trim().length > 0) {
-        data = await searchBooksAPI({ q: activeQuery.trim(), page: p, pageSize: PAGE_SIZE, sort: 'relevance' });
-      } else {
-        data = await getBooks({ page: p, pageSize: PAGE_SIZE });
-      }
-      const rows = Array.isArray(data) ? data : (data?.books || data?.data || []);
-      const normalized = rows.map(normalizeBook);
-      setBooks(normalized);
-    } catch (err) {
-      console.error('Failed to load books:', err);
-      setError('Failed to load books');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // Run search only after user presses the Search button; then paginate.
+  // Initial list (first page)
   useEffect(() => {
-    if (!hasSearched) return;
-    loadPage(page);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, hasSearched]);
+    let mounted = true;
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await getBooks({ page: 1, pageSize });
+        const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : res?.rows ?? res?.items ?? [];
+        const totalCount = Number(res?.total ?? res?.count ?? 0);
+        if (!mounted) return;
+        setBooks(rows);
+        setTotal(totalCount);
+        setPage(1);
+      } catch (e) {
+        if (!mounted) return;
+        setError(e?.message ?? 'Failed to load books');
+      } finally {
+        if (!mounted) return;
+        setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [pageSize]);
 
-  // Borrow flow
+  // Fetch when q or page changes
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setSearching(true);
+      try {
+        const res = q
+          ? await searchBooksAPI({ q, page, pageSize })
+          : await getBooks({ page, pageSize });
+
+        const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : res?.rows ?? res?.items ?? [];
+        const totalCount = Number(res?.total ?? res?.count ?? 0);
+        if (!mounted) return;
+        setBooks(rows);
+        setTotal(totalCount);
+      } catch (e) {
+        if (!mounted) return;
+        setError(e?.message ?? (q ? 'Search failed' : 'Failed to load books'));
+      } finally {
+        if (!mounted) return;
+        setSearching(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [q, page, pageSize]);
+
+  // Borrow helpers
   const openBorrow = (book) => {
     setSelectedBook(book);
+    const today = new Date();
+    setBorrowAt(formatDateISO(today));
+    setDueAt(formatDateISO(new Date(today.getFullYear(), today.getMonth(), today.getDate() + DEFAULT_LOAN_DAYS)));
     setBorrowOpen(true);
   };
-
-  const closeBorrow = () => {
-    setBorrowOpen(false);
-    setSelectedBook(null);
-    setBorrowAt(null);
-    setDueAt(null);
-    setBorrowStatus(null);
-  };
-
-  // Reviews flow
-  const openReviews = (book) => {
-    setReviewBook(book);
-    setReviewOpen(true);
-  };
-
-  const closeReviews = () => {
-    setReviewOpen(false);
-    setReviewBook(null);
-  };
-
-  function handleBorrowSubmit(e) {
-    e.preventDefault();
-
-    if (!selectedBook || !borrowAt || !dueAt) {
-      setBorrowStatus("Please choose dates for your borrow period");
-      return;
+  const closeBorrow = () => { setBorrowOpen(false); setSelectedBook(null); setBorrowAt(null); setDueAt(null); };
+  async function handleBorrowSubmit() {
+    if (!selectedBook) { setBorrowStatus('No book selected'); return; }
+    setBorrowStatus('Saving...');
+    try {
+      await borrowBook({ bookId: selectedBook.id ?? selectedBook.book_id, borrowAt, dueAt });
+      setBorrowStatus('Borrow successful');
+      try {
+        const fresh = await getAvailability(Number(selectedBook.id ?? selectedBook.book_id));
+        setBooks((prev) =>
+          prev.map((b) => {
+            const id = b.id ?? b.book_id;
+            return Number(id) === Number(selectedBook.id ?? selectedBook.book_id)
+              ? { ...b, copies: typeof fresh === 'number' ? fresh : b.copies }
+              : b;
+          })
+        );
+      } catch {}
+    } catch (e) {
+      setBorrowStatus(e?.message ?? 'Borrow failed');
+    } finally {
+      setTimeout(() => { setBorrowOpen(false); setSelectedBook(null); setBorrowAt(null); setDueAt(null); }, 600);
     }
-
-    const payload = {
-      bookId: selectedBook?.id || selectedBook?.bookId || selectedBook?._id,
-      borrowerId: currentUser?.id || currentUser?._id,
-      borrowAt,
-      dueAt,
-    };
-
-    setBorrowStatus("Submitting borrow request...");
-
-    borrowBook(payload)
-      .then(async () => {
-        setBorrowStatus("Borrow request submitted ✅");
-
-        try {
-          const fresh = await getAvailability(payload.bookId);
-          setBooks((prev) => prev.map((b) =>
-            (b.id === payload.bookId || b._id === payload.bookId || b.bookId === payload.bookId)
-              ? { ...b, availability: fresh }
-              : b
-          ));
-        } catch (_) {}
-      })
-      .catch((err) => {
-        console.error(err);
-        setBorrowStatus("Failed to submit. Please try again.");
-      });
   }
+
+  // Reviews
+  const openReviews = (book) => { setReviewBook(book); setReviewOpen(true); };
+  const closeReviews = () => { setReviewOpen(false); setReviewBook(null); };
+  const handleAggregates = (bookId, avg, count) => {
+    setBooks((prev) =>
+      prev.map((b) => {
+        const id = Number(b.id ?? b.book_id);
+        return id === Number(bookId)
+          ? { ...b, avg_rating: Number(avg || 0), reviews_count: Number(count || 0) }
+          : b;
+      })
+    );
+  };
 
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-semibold mb-4">View Books</h1>
+      {loading && <p className="text-gray-600">Loading books...</p>}
+      {error && <p className="text-red-600">{error}</p>}
 
-      <form
-        onSubmit={(e) => { e.preventDefault(); setActiveQuery(q.trim()); setHasSearched(true); setPage(1); }}
-        className="mb-4 flex gap-2 items-center"
-      >
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search books (leave empty to show all)"
-          className="border rounded px-3 py-2 flex-1"
-        />
-        <button type="submit" className="px-3 py-2 border rounded">Search</button>
-      </form>
+      <BooksGrid
+        books={books}
+        loading={loading || searching}
+        onBorrow={openBorrow}
+        onReviews={openReviews}
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        onPageChange={setPage}
+      />
 
-      {error && <div className="text-red-600 mb-4">{String(error)}</div>}
-
-      {hasSearched ? (
-        <>
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm text-gray-600">Page {page}</span>
-            <div className="space-x-2">
-              <button className="px-3 py-1 border rounded" disabled={page === 1 || loading} onClick={() => setPage(p => Math.max(1, p - 1))}>Previous</button>
-              <button className="px-3 py-1 border rounded" disabled={loading || (books && books.length < PAGE_SIZE)} onClick={() => setPage(p => p + 1)}>Next</button>
-            </div>
-          </div>
-
-          <BooksGrid
-            books={books}
-            loading={loading}
-            onBorrow={openBorrow}
-            onReviews={openReviews}
-          />
-
-          <div className="mt-3 flex items-center justify-end gap-2">
-            <button className="px-3 py-1 border rounded" disabled={page === 1 || loading} onClick={() => setPage(p => Math.max(1, p - 1))}>Previous</button>
-            <button className="px-3 py-1 border rounded" disabled={loading || (books && books.length < PAGE_SIZE)} onClick={() => setPage(p => p + 1)}>Next</button>
-          </div>
-        </>
-      ) : (
-        <p className="text-gray-600">Press <strong>Search</strong> to load books.</p>
-      )}
-
-      {/* Borrow Modal */}
       <BorrowModal
         open={borrowOpen}
         book={selectedBook}
-        onClose={closeBorrow}
         borrowAt={borrowAt}
         dueAt={dueAt}
         setBorrowAt={setBorrowAt}
         setDueAt={setDueAt}
-        status={borrowStatus}
+        onClose={closeBorrow}
         onSubmit={handleBorrowSubmit}
-        isAuthenticated={isAuthenticated}
+        status={borrowStatus}
       />
 
-      {/* Reviews Modal */}
       <ReviewsModal
-        open={!!reviewOpen}
+        open={reviewOpen}
         onClose={closeReviews}
         book={reviewBook}
+        isAuthenticated={isAuthenticated}
+        currentUser={currentUser}
+        onAggregates={handleAggregates}
       />
     </div>
   );

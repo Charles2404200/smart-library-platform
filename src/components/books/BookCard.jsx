@@ -8,7 +8,7 @@ export default function BookCard({ book, onBorrow, onReviews, onReview }) {
   const isRetired = !!(book.retired || book._retired);
   const handleReviews = onReviews || onReview;
 
-  const id = Number(book.id ?? book.book_id); // <- normalized id
+  const id = Number(book.id ?? book.book_id); // normalized id
 
   const avg = Number(book.avg_rating ?? book.average_rating ?? book.avgRating ?? 0);
   const count = Number(book.reviews_count ?? book.review_count ?? book.countReviews ?? 0);
@@ -27,6 +27,7 @@ export default function BookCard({ book, onBorrow, onReviews, onReview }) {
 
       <div className="flex items-start justify-between gap-2">
         <h2 className="text-xl font-semibold text-indigo-600">{book.title}</h2>
+        {/* FIX: span tag was misspelled as <spa /> which crashed the page */}
         <span
           className={`ml-2 shrink-0 text-xs px-2 py-0.5 rounded ${
             isRetired ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
@@ -59,7 +60,11 @@ export default function BookCard({ book, onBorrow, onReviews, onReview }) {
               : (avail > 0 ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed')
           }`}
           disabled={isRetired || avail <= 0}
-          title={isRetired ? 'This book has been retired by library staff.' : (avail <= 0 ? 'No copies available right now.' : '')}
+          title={
+            isRetired
+              ? 'This book has been retired by library staff.'
+              : (avail <= 0 ? 'No copies available right now.' : '')
+          }
           onClick={() => !isRetired && avail > 0 && onBorrow && onBorrow(book)}
         >
           {isRetired ? 'Retired' : avail > 0 ? 'Borrow' : 'Out of stock'}

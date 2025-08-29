@@ -157,7 +157,7 @@ export default function AdminAnalytics() {
               target="_blank"
               rel="noreferrer"
             >
-              Download CSV
+   
             </a>
           }>
             <Table
@@ -180,7 +180,8 @@ export default function AdminAnalytics() {
               target="_blank"
               rel="noreferrer"
             >
-              Download CSV
+             
+        
             </a>
           }>
             <Table
@@ -201,7 +202,7 @@ export default function AdminAnalytics() {
               target="_blank"
               rel="noreferrer"
             >
-              Download CSV
+            
             </a>
           }>
             <Table
