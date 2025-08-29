@@ -1,10 +1,9 @@
 // src/components/books/BookCard.jsx
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { resolveImageUrl } from '../../utils/resolveImageUrl';
 
 export default function BookCard({ book, onBorrow, onReviews, onReview }) {
-  const navigate = useNavigate();
-  const avail = book.available_copies ?? book.copies;
+  const avail = Number(book.available_copies ?? book.copies ?? 0);
   const isRetired = !!(book.retired || book._retired);
   const handleReviews = onReviews || onReview;
 
@@ -15,62 +14,78 @@ export default function BookCard({ book, onBorrow, onReviews, onReview }) {
   const full = Math.round(avg);
   const stars = Array.from({ length: 5 }, (_, i) => (i < full ? '★' : '☆')).join('');
 
+  const imgSrc = resolveImageUrl(book.full_image_url || book.image_url);
+
+  // Flexible: supports "authors" as string or array; "publisher" or "publishers"
+  const authors = Array.isArray(book.authors)
+    ? book.authors.join(', ')
+    : (book.authors || '');
+  const publisher = book.publisher
+    || (Array.isArray(book.publishers) ? book.publishers.join(', ') : (book.publishers || ''));
+
   return (
     <div className="bg-white p-4 border rounded-lg shadow hover:shadow-md transition">
-      {book.image_url && (
+      {imgSrc && (
         <img
-          src={book.full_image_url || book.image_url}
-          alt={book.title}
+          src={imgSrc}
+          alt={book.title || 'Book cover'}
           className="w-full h-40 object-cover rounded-md mb-3"
+          onError={(e) => { e.currentTarget.src = '/placeholder-book.png'; }}
         />
       )}
 
       <div className="flex items-start justify-between gap-2">
         <h2 className="text-xl font-semibold text-indigo-600">{book.title}</h2>
-        {/* FIX: span tag was misspelled as <spa /> which crashed the page */}
+      </div>
+
+      {/* Author + publisher */}
+      <div className="text-sm text-gray-600 mt-1">
+        {authors && (
+          <p className="truncate" title={authors}>
+            <span className="font-medium text-gray-700">Author:</span> {authors}
+          </p>
+        )}
+        {publisher && (
+          <p className="truncate" title={publisher}>
+            <span className="font-medium text-gray-700">Publisher:</span> {publisher}
+          </p>
+        )}
+      </div>
+
+      <div className="text-sm text-gray-500 mb-2 mt-2">
+        {stars} <span className="ml-1">({count})</span>
+      </div>
+
+      <div className="flex items-center gap-2 mb-3">
         <span
-          className={`ml-2 shrink-0 text-xs px-2 py-0.5 rounded ${
-            isRetired ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+          className={`px-2 py-1 rounded text-xs ${
+            avail > 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'
           }`}
         >
-          {isRetired ? 'Retired' : 'Active'}
+          {avail} available
         </span>
+        {isRetired && (
+          <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-700">Retired</span>
+        )}
       </div>
 
-      <div className="mt-1 mb-2 text-sm">
-        <span className="text-amber-500 align-middle">{stars}</span>
-        <span className="ml-2 text-gray-600 align-middle">
-          {count > 0 ? `${avg.toFixed(1)} · ${count} review${count > 1 ? 's' : ''}` : 'No reviews yet'}
-        </span>
-      </div>
-
-      <p className="text-gray-700 mb-1">📚 Author(s): {book.authors || '—'}</p>
-      <p className="text-gray-600 text-sm">🏢 Publisher: {book.publisher || '—'}</p>
-      <p className="text-gray-600 text-sm">🏷 Genre: {book.genre || '—'}</p>
-
-      <p className="text-gray-800 font-medium">
-        📦 Available / Total: {avail} / {book.copies}
-      </p>
-
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="flex items-center gap-2">
+        {/* IMPORTANT: call onBorrow, do not navigate; also set type="button" */}
         <button
-          className={`px-4 py-2 text-white rounded ${
-            isRetired
-              ? 'bg-gray-400 cursor-not-allowed'
-              : (avail > 0 ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed')
+          type="button"
+          className={`px-4 py-2 rounded ${
+            isRetired || avail <= 0
+              ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+              : 'bg-indigo-600 text-white hover:bg-indigo-700'
           }`}
+          onClick={() => !isRetired && avail > 0 && onBorrow?.(book)}
           disabled={isRetired || avail <= 0}
-          title={
-            isRetired
-              ? 'This book has been retired by library staff.'
-              : (avail <= 0 ? 'No copies available right now.' : '')
-          }
-          onClick={() => !isRetired && avail > 0 && onBorrow && onBorrow(book)}
         >
           {isRetired ? 'Retired' : avail > 0 ? 'Borrow' : 'Out of stock'}
         </button>
 
         <button
+          type="button"
           className="px-4 py-2 rounded border border-gray-300 hover:bg-gray-50 text-gray-800"
           onClick={() => handleReviews && handleReviews(book)}
         >

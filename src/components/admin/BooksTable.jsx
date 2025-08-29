@@ -1,27 +1,14 @@
 // src/components/admin/BooksTable.jsx
 import React from 'react';
+import { resolveImageUrl } from '../../utils/resolveImageUrl';
+import { API_URL } from '../../config/env';
 
 /**
- * BooksTable
- * Props:
- *  - books: Array<Book>
- *  - loading: boolean
- *  - q: string (search query)
- *  - onQuery: (q: string) => void
- *  - editedCopies: Record<book_id, number>
- *  - editedAvail:  Record<book_id, number>
- *  - setEditedCopies: (fn) => void
- *  - setEditedAvail:  (fn) => void
- *  - onSaveCopies: (bookId: number, copies: number) => Promise<void>
- *  - onSaveAvailable: (bookId: number, available: number) => Promise<void>
- *  - onUploadCover: (bookId: number, file: File) => Promise<void>
- *  - uploadingRow: number | null
- *  - onRetire?: (bookId: number) => Promise<void>
- *  - onUnretire?: (bookId: number) => Promise<void>
+ * Admin Books table - simplified/fully compatible upload endpoint logic
  */
 export default function BooksTable({
   books = [],
-  loading = false,
+  loading,
   q = '',
   onQuery,
   editedCopies = {},
@@ -30,20 +17,14 @@ export default function BooksTable({
   setEditedAvail,
   onSaveCopies,
   onSaveAvailable,
-  onUploadCover,
-  uploadingRow,
   onRetire,
   onUnretire,
+  onUploadImage, // optional handler provided by parent
 }) {
-  // --- Helpers to read edited values (fall back to server values)
-  const getEditedCopies = (b) => (editedCopies?.[b.book_id] ?? b.copies ?? 0);
-  const getEditedAvail  = (b) => (editedAvail?.[b.book_id]  ?? b.available_copies ?? 0);
-
-  // --- Client-side filter (kept from existing behavior)
+  // --- helpers / pagination (kept identical to previous) ---
   const filtered = React.useMemo(() => {
-    if (!Array.isArray(books)) return [];
-    if (!q || !q.trim()) return books;
-    const s = q.toLowerCase();
+    const s = (q || '').toLowerCase().trim();
+    if (!s) return books;
     return books.filter((b) =>
       String(b.book_id ?? '').includes(s) ||
       String(b.title ?? '').toLowerCase().includes(s) ||
@@ -53,7 +34,6 @@ export default function BooksTable({
     );
   }, [books, q]);
 
-  // --- Pagination
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(24);
   const totalItems = filtered.length;
@@ -64,40 +44,141 @@ export default function BooksTable({
     () => filtered.slice(startIndex, startIndex + pageSize),
     [filtered, startIndex, pageSize]
   );
-
-  // Reset to first page when dataset or search changes
   React.useEffect(() => { setPage(1); }, [q, books]);
+
+  // local UI state
+  const [imageOverride, setImageOverride] = React.useState({}); // { book_id: image_url }
+  const [uploadingId, setUploadingId] = React.useState(null);
+
+  // debounce helpers for auto-save of copies / available
+  const copiesTimers = React.useRef({});
+  const availTimers  = React.useRef({});
+  const DEBOUNCE_MS  = 500;
+
+  const scheduleSaveCopies = React.useCallback((bookId, value) => {
+    if (!onSaveCopies) return;
+    clearTimeout(copiesTimers.current[bookId]);
+    copiesTimers.current[bookId] = setTimeout(() => {
+      onSaveCopies(bookId, value);
+    }, DEBOUNCE_MS);
+  }, [onSaveCopies]);
+
+  const scheduleSaveAvail = React.useCallback((bookId, value) => {
+    if (!onSaveAvailable) return;
+    clearTimeout(availTimers.current[bookId]);
+    availTimers.current[bookId] = setTimeout(() => {
+      onSaveAvailable(bookId, value);
+    }, DEBOUNCE_MS);
+  }, [onSaveAvailable]);
+
+  const getEditedCopies = (b) => {
+    const v = editedCopies?.[b.book_id];
+    return (v == null) ? (Number(b.copies ?? 0)) : v;
+  };
+  const getEditedAvail = (b) => {
+    const v = editedAvail?.[b.book_id];
+    return (v == null) ? (Number(b.available_copies ?? 0)) : v;
+  };
 
   const handleCopiesChange = (b, val) => {
     const n = Number(val);
-    setEditedCopies?.((prev) => ({ ...(prev || {}), [b.book_id]: Number.isFinite(n) ? n : 0 }));
+    const safe = Number.isFinite(n) && n >= 0 ? n : 0;
+    setEditedCopies?.((prev) => ({ ...(prev || {}), [b.book_id]: safe }));
+    scheduleSaveCopies?.(b.book_id, safe);
   };
   const handleAvailChange = (b, val) => {
     const n = Number(val);
-    setEditedAvail?.((prev) => ({ ...(prev || {}), [b.book_id]: Number.isFinite(n) ? n : 0 }));
+    const safe = Number.isFinite(n) && n >= 0 ? n : 0;
+    setEditedAvail?.((prev) => ({ ...(prev || {}), [b.book_id]: safe }));
+    scheduleSaveAvail?.(b.book_id, safe);
   };
 
-  const handleCoverSelect = (b, file) => {
-    if (!file) return;
-    onUploadCover?.(b.book_id, file);
-  };
+  // Build a correct upload endpoint irrespective of how API_URL is set.
+  // If API_URL already ends with "/api" we avoid duplicating it.
+  function buildAdminUploadUrl(bookId) {
+    const base = (API_URL || '').replace(/\/+$/, ''); // strip trailing slashes
+    if (!base) return `/api/admin/books/${bookId}/image`;
+    if (base.endsWith('/api')) {
+      return `${base}/admin/books/${bookId}/image`;
+    }
+    // base does not end with /api
+    return `${base}/api/admin/books/${bookId}/image`;
+  }
+
+  // safe response text extraction
+  async function extractErrorMessage(res) {
+    try {
+      const json = await res.json();
+      return json?.error || json?.message || JSON.stringify(json);
+    } catch {
+      try { return await res.text(); } catch { return `${res.status} ${res.statusText}`; }
+    }
+  }
+
+  // upload implementation: prefer onUploadImage prop, else call API directly
+  const doUploadImage = React.useCallback(
+    async (bookId, file) => {
+      if (onUploadImage) {
+        // delegate to parent if provided
+        return onUploadImage(bookId, file);
+      }
+
+      const fd = new FormData();
+      fd.append('image', file);
+
+      // try to extract token (same behavior used elsewhere in app)
+      let token = null;
+      try {
+        const raw = localStorage.getItem('token');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          token = typeof parsed === 'string' ? parsed : (parsed?.token ?? raw);
+        }
+      } catch {
+        token = localStorage.getItem('token');
+      }
+
+      const endpoint = buildAdminUploadUrl(bookId);
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: fd,
+      });
+
+      if (!res.ok) {
+        const msg = await extractErrorMessage(res);
+        throw new Error(msg || 'Upload failed');
+      }
+
+      const data = await res.json();
+      // expected: { image_url: '/uploads/books/...' } or full URL
+      return data?.image_url ?? data?.url ?? null;
+    },
+    [onUploadImage]
+  );
+
+  // helper for rendering
+  const safeNum = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
   return (
-    <div className="bg-white border rounded-xl shadow p-5">
-      <div className="flex items-center justify-between mb-4 gap-3">
-        <h2 className="text-xl font-semibold">📚 Books</h2>
-        <div className="flex items-center gap-2">
-          <input
-            value={q}
-            onChange={(e) => onQuery?.(e.target.value)}
-            placeholder="Search by id / title / genre / author / publisher…"
-            className="border rounded px-3 py-2 w-72"
-            aria-label="Search books"
-          />
+    <div>
+      {/* top search / page size */}
+      <div className="mb-3 flex items-center justify-between">
+        <input
+          type="text"
+          value={q}
+          onChange={(e) => onQuery?.(e.target.value)}
+          className="border rounded px-3 py-2 w-full max-w-md"
+          placeholder="Search by title, genre, author, publisher…"
+          aria-label="Search books"
+        />
+
+        <div className="ml-3 flex items-center gap-2">
           <select
-            className="border rounded px-2 py-2"
             value={pageSize}
-            onChange={(e) => { setPage(1); setPageSize(Number(e.target.value)); }}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+            className="border rounded px-2 py-2"
             aria-label="Rows per page"
           >
             {[10, 20, 24, 30, 50, 100].map(n => <option key={n} value={n}>{n}/page</option>)}
@@ -133,8 +214,8 @@ export default function BooksTable({
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full table-auto border border-gray-300 shadow-sm">
+          <div className="overflow-x-auto border rounded-lg">
+            <table className="min-w-full text-sm">
               <thead>
                 <tr className="bg-gray-100">
                   <th className="px-3 py-2 text-left">ID</th>
@@ -151,99 +232,106 @@ export default function BooksTable({
               </thead>
               <tbody>
                 {paged.map((b) => {
+                  const bookId = b.book_id;
                   const isRetired = !!(b.retired === 1 || b.retired === true || b.retired === '1');
+                  const img = imageOverride[bookId] || b.image_url;
+
                   return (
-                    <tr key={b.book_id} className="border-t align-top">
-                      <td className="px-3 py-2">{b.book_id}</td>
+                    <tr key={bookId} className="border-t align-top">
+                      <td className="px-3 py-2">{bookId}</td>
+
                       <td className="px-3 py-2">
-                        {b.image_url ? (
+                        {img ? (
                           <img
-                            src={b.image_url}
+                            src={resolveImageUrl(img)}
                             alt={b.title}
                             className="h-16 w-12 object-cover rounded border"
                           />
                         ) : (
-                          <div className="h-16 w-12 rounded bg-gray-100 border flex items-center justify-center text-xs text-gray-400">
+                          <div className="h-16 w-12 rounded bg-gray-50 border flex items-center justify-center text-xs text-gray-400">
                             No cover
                           </div>
                         )}
                       </td>
-                      <td className="px-3 py-2 max-w-[22rem]">
-                        <div className="font-medium">{b.title}</div>
-                        <div className="text-xs text-gray-600">{b.genre}</div>
-                      </td>
-                      <td className="px-3 py-2 text-sm">{b.authors || '-'}</td>
-                      <td className="px-3 py-2 text-sm">{b.publishers || '-'}</td>
 
-                      {/* Status badge with original colors */}
+                      <td className="px-3 py-2">
+                        <div className="font-medium">{b.title}</div>
+                        <div className="text-gray-500">{b.genre || '-'}</div>
+                      </td>
+
+                      <td className="px-3 py-2 text-sm whitespace-pre-line">
+                        {b.authors || '-'}
+                      </td>
+                      <td className="px-3 py-2 text-sm whitespace-pre-line">
+                        {b.publishers || '-'}
+                      </td>
+
                       <td className="px-3 py-2">
                         {isRetired ? (
-                          <span className="inline-flex items-center text-xs font-semibold px-2 py-1 rounded bg-red-100 text-red-700 border border-red-200">
+                          <span className="inline-flex items-center px-2 py-1 text-xs rounded bg-rose-100 text-rose-700 border border-rose-200">
                             Retired
                           </span>
                         ) : (
-                          <span className="inline-flex items-center text-xs font-semibold px-2 py-1 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">
+                          <span className="inline-flex items-center px-2 py-1 text-xs rounded bg-emerald-100 text-emerald-700 border border-emerald-200">
                             Active
                           </span>
                         )}
                       </td>
 
                       <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min={0}
-                            value={getEditedCopies(b)}
-                            onChange={(e) => handleCopiesChange(b, e.target.value)}
-                            className="border rounded px-2 py-1 w-24"
-                            aria-label={`Copies for ${b.title}`}
-                            disabled={isRetired}
-                          />
-                          <button
-                            onClick={() => onSaveCopies?.(b.book_id, getEditedCopies(b))}
-                            className="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
-                            disabled={isRetired}
-                            title={isRetired ? 'Book is retired' : undefined}
-                          >
-                            Save
-                          </button>
-                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          value={getEditedCopies(b)}
+                          onChange={(e) => handleCopiesChange(b, e.target.value)}
+                          onBlur={(e) => handleCopiesChange(b, e.target.value)}
+                          className="border rounded px-2 py-1 w-24"
+                          aria-label={`Copies for ${b.title}`}
+                          disabled={isRetired}
+                        />
                       </td>
 
                       <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min={0}
-                            value={getEditedAvail(b)}
-                            onChange={(e) => handleAvailChange(b, e.target.value)}
-                            className="border rounded px-2 py-1 w-24"
-                            aria-label={`Available copies for ${b.title}`}
-                            disabled={isRetired}
-                          />
-                          <button
-                            onClick={() => onSaveAvailable?.(b.book_id, getEditedAvail(b))}
-                            className="px-3 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50"
-                            disabled={isRetired}
-                            title={isRetired ? 'Book is retired' : undefined}
-                          >
-                            Save
-                          </button>
-                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          value={getEditedAvail(b)}
+                          onChange={(e) => handleAvailChange(b, e.target.value)}
+                          onBlur={(e) => handleAvailChange(b, e.target.value)}
+                          className="border rounded px-2 py-1 w-24"
+                          aria-label={`Available copies for ${b.title}`}
+                          disabled={isRetired}
+                        />
                       </td>
 
                       <td className="px-3 py-2">
-                        <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <label className={`relative inline-flex items-center gap-2 ${isRetired ? 'opacity-60 cursor-not-allowed' : ''}`}>
                           <input
                             type="file"
                             accept="image/*"
-                            className="hidden"
-                            onChange={(e) => handleCoverSelect(b, e.target.files?.[0])}
-                            disabled={uploadingRow === b.book_id || isRetired}
+                            disabled={isRetired || uploadingId === bookId}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              try {
+                                setUploadingId(bookId);
+                                const url = await doUploadImage(bookId, file);
+                                if (url) {
+                                  setImageOverride((prev) => ({ ...prev, [bookId]: url }));
+                                }
+                              } catch (err) {
+                                // friendly alert; in dev you'll also see network error
+                                // eslint-disable-next-line no-alert
+                                alert(err?.message || 'Failed to upload image');
+                              } finally {
+                                setUploadingId((id) => (id === bookId ? null : id));
+                                e.target.value = '';
+                              }
+                            }}
                           />
-                          <span className="px-3 py-1 border rounded hover:bg-gray-50">
-                            {uploadingRow === b.book_id ? 'Uploading…' : 'Choose image'}
-                          </span>
+                          {uploadingId === bookId && (
+                            <span className="text-xs text-gray-500">Uploading…</span>
+                          )}
                         </label>
                       </td>
 
@@ -251,15 +339,15 @@ export default function BooksTable({
                         <div className="flex items-center gap-2">
                           {isRetired ? (
                             <button
-                              className="px-3 py-1 bg-amber-600 text-white rounded hover:bg-amber-700"
-                              onClick={() => onUnretire?.(b.book_id)}
+                              className="px-3 py-1 border rounded hover:bg-gray-50"
+                              onClick={() => onUnretire?.(bookId)}
                             >
                               Unretire
                             </button>
                           ) : (
                             <button
-                              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
-                              onClick={() => onRetire?.(b.book_id)}
+                              className="px-3 py-1 border rounded hover:bg-gray-50"
+                              onClick={() => onRetire?.(bookId)}
                             >
                               Retire
                             </button>
@@ -274,25 +362,23 @@ export default function BooksTable({
           </div>
 
           <div className="mt-3 flex items-center justify-between">
+            <button
+              className="px-3 py-1 border rounded disabled:opacity-50"
+              disabled={page <= 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+            >
+              Previous
+            </button>
             <span className="text-sm text-gray-600">
               Page {page} / {pageCount} · Showing {startIndex + 1}–{endIndex} of {totalItems}
             </span>
-            <div className="space-x-2">
-              <button
-                className="px-3 py-1 border rounded disabled:opacity-50"
-                disabled={page <= 1}
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-              >
-                Previous
-              </button>
-              <button
-                className="px-3 py-1 border rounded disabled:opacity-50"
-                disabled={page >= pageCount}
-                onClick={() => setPage(p => Math.min(pageCount, p + 1))}
-              >
-                Next
-              </button>
-            </div>
+            <button
+              className="px-3 py-1 border rounded disabled:opacity-50"
+              disabled={page >= pageCount}
+              onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+            >
+              Next
+            </button>
           </div>
         </>
       )}
