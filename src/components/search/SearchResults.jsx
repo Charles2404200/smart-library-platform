@@ -4,13 +4,13 @@ import BooksGrid from '../books/BooksGrid';
 
 /**
  * Forwards pagination + handlers to BooksGrid.
+ * Accepts `books` (array) from the page.
  */
 export default function SearchResults({
-  books,
+  books = [],         // ensure array
   loading,
   onBorrow,
   onReviews,
-  // pagination props (forwarded)
   page = 1,
   pageSize = 24,
   total = 0,
@@ -19,8 +19,8 @@ export default function SearchResults({
   return (
     <div>
       <BooksGrid
-        books={books}
-        loading={loading}
+        books={Array.isArray(books) ? books : []}
+        loading={!!loading}
         onBorrow={onBorrow}
         onReviews={onReviews}
         page={page}
