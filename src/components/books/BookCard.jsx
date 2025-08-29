@@ -14,14 +14,16 @@ export default function BookCard({ book, onBorrow, onReviews, onReview }) {
   const count = Number(book.reviews_count ?? book.review_count ?? book.countReviews ?? 0);
   const full = Math.round(avg);
   const stars = Array.from({ length: 5 }, (_, i) => (i < full ? '★' : '☆')).join('');
+  const imageUrl = book.full_image_url || book.image_url || '/placeholder.png';
+
 
   return (
     <div className="bg-white p-4 border rounded-lg shadow hover:shadow-md transition">
-      {book.image_url && (
+      {imageUrl && (
         <img
-          src={book.full_image_url || book.image_url}
+          src={imageUrl}
           alt={book.title}
-          className="w-full h-40 object-cover rounded-md mb-3"
+          className="w-full h-64 object-cover rounded-md mb-3"
         />
       )}
 

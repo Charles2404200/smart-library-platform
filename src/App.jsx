@@ -20,8 +20,9 @@ import Navbar from './components/navbar/Navbar';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [jwtUser, setJwtUser] = useState(null);         // decoded token (id,email,role)
+  const [jwtUser, setJwtUser] = useState(null);       // decoded token (id,email,role)
   const [profileUser, setProfileUser] = useState(null); // user object saved at login
+  const [isInitializing, setIsInitializing] = useState(true); // <-- THÊM STATE MỚI
 
   const user = useMemo(() => profileUser || jwtUser, [profileUser, jwtUser]);
 
@@ -45,6 +46,7 @@ export default function App() {
         setIsAuthenticated(false);
       }
     }
+    setIsInitializing(false); 
   }, []);
 
   // Keep state in sync if token/user changes in another tab
@@ -109,6 +111,10 @@ export default function App() {
     return element;
   };
 
+  if (isInitializing) {
+    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  }
+
   return (
     <Router>
       <Navbar isAuthenticated={isAuthenticated} user={user} onLogout={handleLogout} />
@@ -121,14 +127,14 @@ export default function App() {
         <Route path="/read/:bookId" element={<ReaderPage />} />
         
         <Route
-  path="/my-library"
-  element={
-    <PrivateRoute
-      element={<MyLibrary />}
-      roles={['reader', 'staff', 'admin']}
-    />
-  }
-/>
+          path="/my-library"
+          element={
+            <PrivateRoute
+              element={<MyLibrary />}
+              roles={['reader', 'staff', 'admin']}
+            />
+          }
+        />
 
         {/* Borrowed (role: reader/staff/admin) */}
         <Route
