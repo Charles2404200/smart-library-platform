@@ -51,7 +51,7 @@ export default function Navbar({ isAuthenticated, onLogout, user }) {
               className="ml-2 px-3 py-1.5 bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200"
               title="Open advanced search"
             >
-              Filter
+             Search
             </button>
           </form>
 

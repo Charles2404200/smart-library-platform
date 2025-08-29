@@ -244,7 +244,7 @@ export default function App() {
         <Route path="/" element={<HomePage isAuthenticated={isAuthenticated} user={user} />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-        <Route path="/books" element={<ViewBooksPage />} />
+        <Route path="/books" element={<ViewBooksPage isAuthenticated={isAuthenticated} currentUser={user} />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/read/:bookId" element={<ReaderPage />} />
         

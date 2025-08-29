@@ -1,42 +1,40 @@
 // src/services/booksService.js
-// Modified: call the backend's GET /api/books/search/all for advanced search
-// and keep caching/dedupe logic for list & availability.
+// Book-related API helpers: cached GET, list, search, availability, and fetchAllBooks (pages automatically).
 
 import http from './http';
 
 /**
- * Simple module-level cache for GET endpoints.
- * Keyed by request path (including query string).
- * Each entry: { data, expiresAt }
+ * Simple in-memory cache for GET endpoints (short TTL).
+ * Keyed by full request path (including query string).
  */
 const CACHE_TTL_MS = 30 * 1000; // 30s
 const cache = new Map();
 const inflight = new Map();
 
 function cacheGet(key) {
-  const e = cache.get(key);
-  if (!e) return null;
-  if (e.expiresAt && e.expiresAt < Date.now()) {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt && entry.expiresAt < Date.now()) {
     cache.delete(key);
     return null;
   }
-  return e.data;
+  return entry.data;
 }
 
 function cacheSet(key, data, ttl = CACHE_TTL_MS) {
   cache.set(key, { data, expiresAt: Date.now() + ttl });
 }
 
-/** wrapper that dedups inflight calls and caches GET results */
+/**
+ * cachedGet: dedupe inflight requests and cache results.
+ * Returns whatever `http()` returns (usually parsed JSON).
+ */
 async function cachedGet(path, opts = {}) {
   const key = path;
   const cached = cacheGet(key);
-  if (cached) {
-    return cached;
-  }
-  if (inflight.has(key)) {
-    return inflight.get(key);
-  }
+  if (cached !== null) return cached;
+  if (inflight.has(key)) return inflight.get(key);
+
   const p = (async () => {
     try {
       const res = await http(path, opts);
@@ -46,23 +44,26 @@ async function cachedGet(path, opts = {}) {
       inflight.delete(key);
     }
   })();
+
   inflight.set(key, p);
   return p;
 }
 
-/** Fetch all books (list page) */
+/**
+ * GET /api/books?page=...&pageSize=...
+ * Backend in this project returns an array of book rows for this route.
+ */
 export async function getBooks({ page = 1, pageSize = 24 } = {}) {
-  // backend route: GET /api/books?page=...&pageSize=...
-  const qs = new URLSearchParams();
-  qs.set('page', String(page));
-  qs.set('pageSize', String(pageSize));
-  const path = `/api/books?${qs.toString()}`;
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('pageSize', String(pageSize));
+  const path = `/api/books?${params.toString()}`;
   return cachedGet(path);
 }
 
 /**
- * Legacy quick search used by ViewBooks page (keeps q-based behavior)
- * params: { q, page=1, pageSize=24, sort='relevance', minRating }
+ * searchBooks (legacy q-based search used by some pages)
+ * Calls backend `/api/books/search/all?q=...&page=...&pageSize=...`
  */
 export async function searchBooks({ q = '', page = 1, pageSize = 24, sort = 'relevance', minRating } = {}) {
   const params = new URLSearchParams();
@@ -72,48 +73,71 @@ export async function searchBooks({ q = '', page = 1, pageSize = 24, sort = 'rel
   if (sort) params.set('sort', sort);
   if (minRating) params.set('minRating', String(minRating));
   const query = params.toString() ? `?${params.toString()}` : '';
-  // Use cachedGet only if you want caching for searches. Here we call http directly.
   return http(`/api/books/search/all${query}`);
 }
 
 /**
- * Advanced search - calls existing backend GET /api/books/search/all using query parameters.
- * Accepts payload: { title, author, genre, publisher, q, page, pageSize, ... }
+ * Advanced search wrapper (keeps flexible payload).
+ * Example payload keys: title, author, genre, publisher, q, page, pageSize, sort, minRating
  */
 export async function searchBooksAdvanced(payload = {}) {
-  // Build query string from payload (ignore empty values)
   const params = new URLSearchParams();
-  const allowed = ['title', 'author', 'genre', 'publisher', 'q', 'page', 'pageSize', 'sort', 'minRating'];
   Object.keys(payload || {}).forEach((k) => {
     const v = payload[k];
     if (v === undefined || v === null) return;
     const s = String(v).trim();
     if (s === '') return;
-    // only include known keys to avoid surprises
-    if (allowed.includes(k)) {
-      params.set(k, s);
-    } else {
-      // include any other keys as well (flexible)
-      params.set(k, s);
-    }
+    params.set(k, s);
   });
-
   const qs = params.toString() ? `?${params.toString()}` : '';
   return http(`/api/books/search/all${qs}`);
 }
 
 /**
- * Keep getAvailability exported here; other parts of the app use it.
+ * Fetch single book availability (cached).
+ * Backend route: GET /api/books/:id/availability
  */
 export async function getAvailability(bookId) {
   if (bookId === undefined || bookId === null) {
     throw new Error('getAvailability: bookId is required');
   }
-  // Use cachedGet to dedupe inflight calls for availability
   return cachedGet(`/api/books/${bookId}/availability`);
 }
 
-// Optional: expose cache clear for debugging
+/**
+ * fetchAllBooks(batchSize = 200)
+ *
+ * Repeatedly calls getBooks({ page, pageSize }) and accumulates results until
+ * a page returns fewer than batchSize items. Returns an array of rows.
+ *
+ * Use with caution on very large datasets — if you have thousands of books, prefer
+ * a "Load more" approach or server-side endpoint that returns everything in one shot.
+ */
+export async function fetchAllBooks(batchSize = 200) {
+  const all = [];
+  let page = 1;
+
+  while (true) {
+    const data = await getBooks({ page, pageSize: batchSize });
+
+    // backend might return an array directly, or { books: [...] } or { data: [...] }
+    const rows = Array.isArray(data) ? data : (data && (data.books || data.data || []));
+    if (!Array.isArray(rows)) break;
+    if (rows.length === 0) break;
+
+    all.push(...rows);
+
+    if (rows.length < batchSize) break; // last page
+    page += 1;
+
+    // safety guard
+    if (page > 1000) break;
+  }
+
+  return all;
+}
+
+/** Debug helper */
 export function _clearBooksCache() {
   cache.clear();
   inflight.clear();
