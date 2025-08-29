@@ -1,146 +1,294 @@
 // src/pages/ViewBooks/ViewBooks.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getBooks, searchBooks as searchBooksAPI, getAvailability } from '../../services/booksService';
 import { borrowBook } from '../../services/borrowService';
+import { ReviewsAPI } from '../../services/reviews';
 import BooksGrid from '../../components/books/BooksGrid';
 import BorrowModal from '../../components/books/BorrowModal';
 import ReviewsModal from '../../components/reviews/ReviewsModal';
-
-const DEFAULT_LOAN_DAYS = 14;
-
-function formatDateISO(d) {
-  const date = d instanceof Date ? d : new Date(d);
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-// --- Auth from localStorage ---
-const tokenRaw = localStorage.getItem('token');
-let token = null;
-try {
-  const parsed = JSON.parse(tokenRaw);
-  token = typeof parsed === 'string' ? parsed : (parsed && parsed.token) ? parsed.token : tokenRaw;
-} catch { token = tokenRaw; }
-const isAuthenticated = !!token;
-let currentUser = null;
-if (isAuthenticated && typeof token === 'string' && token.includes('.')) {
-  try { const payload = JSON.parse(atob(token.split('.')[1])); currentUser = payload?.user ?? payload ?? null; } catch {}
-}
+import { API_URL } from '../../config/env';
 
 export default function ViewBooksPage() {
-  const [searchParams] = useSearchParams();
-  const q = searchParams.get('q') || '';
-
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
-  const [error, setError] = useState(null);
-
-  // Pagination
-  const [page, setPage] = useState(1);
-  const [pageSize] = useState(24);
-  const [total, setTotal] = useState(0);
-
-  // Borrow
-  const [borrowOpen, setBorrowOpen] = useState(false);
-  const [selectedBook, setSelectedBook] = useState(null);
-  const [borrowAt, setBorrowAt] = useState(null);
-  const [dueAt, setDueAt] = useState(null);
   const [borrowStatus, setBorrowStatus] = useState(null);
+  const [searchParams] = useSearchParams();
 
-  // Reviews
+  // Borrow modal state
+  const [borrowModalOpen, setBorrowModalOpen] = useState(false);
+  const [selectedBook, setSelectedBook] = useState(null);
+  const [borrowAt, setBorrowAt] = useState('');
+  const [dueAt, setDueAt] = useState('');
+
+  // Reviews modal state
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewBook, setReviewBook] = useState(null);
 
-  // Initial list (first page)
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await getBooks({ page: 1, pageSize });
-        const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : res?.rows ?? res?.items ?? [];
-        const totalCount = Number(res?.total ?? res?.count ?? 0);
-        if (!mounted) return;
-        setBooks(rows);
-        setTotal(totalCount);
-        setPage(1);
-      } catch (e) {
-        if (!mounted) return;
-        setError(e?.message ?? 'Failed to load books');
-      } finally {
-        if (!mounted) return;
-        setLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
-  }, [pageSize]);
+  // Logged-in info
+  const currentUser = useMemo(() => {
+    try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; }
+  }, []);
+  const isAuthenticated = !!localStorage.getItem('token');
 
-  // Fetch when q or page changes
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      setSearching(true);
-      try {
-        const res = q
-          ? await searchBooksAPI({ q, page, pageSize })
-          : await getBooks({ page, pageSize });
+  // ---- helpers
+  const normalizeBook = (b) => {
+    const id = b.id ?? b.book_id;
+    const image = b?.image_url;
+    const fullImg = image
+      ? (image.startsWith('http')
+          ? image
+          : `${API_URL}${image.startsWith('/') ? '' : '/'}${image}`)
+      : undefined;
 
-        const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : res?.rows ?? res?.items ?? [];
-        const totalCount = Number(res?.total ?? res?.count ?? 0);
-        if (!mounted) return;
-        setBooks(rows);
-        setTotal(totalCount);
-      } catch (e) {
-        if (!mounted) return;
-        setError(e?.message ?? (q ? 'Search failed' : 'Failed to load books'));
-      } finally {
-        if (!mounted) return;
-        setSearching(false);
-      }
-    })();
-    return () => { mounted = false; };
-  }, [q, page, pageSize]);
-
-  // Borrow helpers
-  const openBorrow = (book) => {
-    setSelectedBook(book);
-    const today = new Date();
-    setBorrowAt(formatDateISO(today));
-    setDueAt(formatDateISO(new Date(today.getFullYear(), today.getMonth(), today.getDate() + DEFAULT_LOAN_DAYS)));
-    setBorrowOpen(true);
+    return {
+      ...b,
+      id,
+      full_image_url: fullImg,
+      avg_rating: Number(b.avg_rating ?? b.average_rating ?? b.avgRating ?? 0),
+      reviews_count: Number(b.reviews_count ?? b.review_count ?? b.countReviews ?? 0),
+      available_copies: b.available_copies ?? b.copies ?? 0,
+      // keep any retired flag that may come from backend (if present)
+      retired: !!b.retired,
+    };
   };
-  const closeBorrow = () => { setBorrowOpen(false); setSelectedBook(null); setBorrowAt(null); setDueAt(null); };
-  async function handleBorrowSubmit() {
-    if (!selectedBook) { setBorrowStatus('No book selected'); return; }
-    setBorrowStatus('Saving...');
-    try {
-      await borrowBook({ bookId: selectedBook.id ?? selectedBook.book_id, borrowAt, dueAt });
-      setBorrowStatus('Borrow successful');
-      try {
-        const fresh = await getAvailability(Number(selectedBook.id ?? selectedBook.book_id));
-        setBooks((prev) =>
-          prev.map((b) => {
-            const id = b.id ?? b.book_id;
-            return Number(id) === Number(selectedBook.id ?? selectedBook.book_id)
-              ? { ...b, copies: typeof fresh === 'number' ? fresh : b.copies }
-              : b;
-          })
-        );
-      } catch {}
-    } catch (e) {
-      setBorrowStatus(e?.message ?? 'Borrow failed');
-    } finally {
-      setTimeout(() => { setBorrowOpen(false); setSelectedBook(null); setBorrowAt(null); setDueAt(null); }, 600);
+
+  function markRetiredLocally(bookId) {
+    setBooks(prev =>
+      prev.map(b =>
+        Number(b.id ?? b.book_id) === Number(bookId)
+          ? { ...b, retired: true, _retired: true }
+          : b
+      )
+    );
+  }
+
+  // ---- fetch aggregate for books missing it (FE fallback)
+  async function hydrateAggregates(list) {
+    const targets = list.filter(b => (b.avg_rating === 0 && b.reviews_count === 0));
+    if (targets.length === 0) return;
+
+    const chunkSize = 6;
+    for (let i = 0; i < targets.length; i += chunkSize) {
+      const slice = targets.slice(i, i + chunkSize);
+      const results = await Promise.allSettled(
+        slice.map(b => ReviewsAPI.list(b.id ?? b.book_id))
+      );
+      setBooks(prev => {
+        const map = new Map(prev.map(x => [Number(x.id ?? x.book_id), { ...x }]));
+        slice.forEach((b, idx) => {
+          const r = results[idx];
+          if (r.status === 'fulfilled' && r.value) {
+            const avg = Number(r.value.avgRating ?? 0);
+            const cnt = Number(r.value.count ?? 0);
+            const key = Number(b.id ?? b.book_id);
+            if (map.has(key)) {
+              const cur = map.get(key);
+              map.set(key, { ...cur, avg_rating: avg, reviews_count: cnt });
+            }
+          }
+        });
+        return Array.from(map.values());
+      });
     }
   }
 
-  // Reviews
-  const openReviews = (book) => { setReviewBook(book); setReviewOpen(true); };
-  const closeReviews = () => { setReviewOpen(false); setReviewBook(null); };
+  // ---- load all books
+  async function loadBooks(withHydrate = true) {
+    setLoading(true);
+    try {
+      const data = await getBooks();
+      const rows = Array.isArray(data) ? data : data.books || [];
+      const normalized = rows.map(normalizeBook);
+      setBooks(normalized);
+      if (withHydrate) hydrateAggregates(normalized);
+    } catch (err) {
+      console.error('❌ Error fetching books:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // initial load (no query)
+  useEffect(() => { loadBooks(true); }, []);
+
+  // ⭐ react to ?q=... from Navbar
+  useEffect(() => {
+    const q = (searchParams.get('q') || '').trim();
+
+    if (q.length < 1) {
+      loadBooks(true);
+      return;
+    }
+
+    let alive = true;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const data = await searchBooksAPI({ q, page: 1, pageSize: 24, sort: 'relevance' });
+        const rows = Array.isArray(data) ? data : data.books || [];
+        if (!alive) return;
+        const normalized = rows.map(normalizeBook);
+        setBooks(normalized);
+        hydrateAggregates(normalized);
+      } catch (e) {
+        console.error('❌ search error:', e);
+        if (alive) loadBooks(true);
+      } finally {
+        if (alive) setSearching(false);
+      }
+    }, 250);
+
+    return () => { alive = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // open borrow modal (with retired/availability guard)
+  const openBorrowModal = async (book) => {
+    try {
+      const a = await getAvailability(book.id ?? book.book_id); // { available, copies, available_copies, retired }
+      if (a?.retired) {
+        setBorrowStatus('❌ This book has been retired by the library and cannot be borrowed.');
+        markRetiredLocally(book.id ?? book.book_id);
+        return;
+      }
+      if (!a?.available) {
+        setBorrowStatus('❌ No copies available at the moment.');
+        return;
+      }
+    } catch {
+      // ignore — backend will still enforce, but FE tries to be helpful
+    }
+
+    const now = new Date();
+    const plus14 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const fmt = (d) => {
+      const z = new Date(d);
+      const iso = new Date(z.getTime() - z.getTimezoneOffset() * 60000).toISOString();
+      return iso.slice(0, 16);
+    };
+    setSelectedBook(book);
+    setBorrowAt(fmt(now));
+    setDueAt(fmt(plus14));
+    setBorrowModalOpen(true);
+    setBorrowStatus(null);
+  };
+
+  const closeBorrowModal = () => {
+    setBorrowModalOpen(false);
+    setSelectedBook(null);
+    setBorrowStatus(null);
+  };
+
+  async function handleBorrowSubmit(e) {
+    e.preventDefault();
+    if (!selectedBook) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) return alert('Please log in to borrow a book.');
+    if (new Date(dueAt) <= new Date(borrowAt)) {
+      return alert('Due date must be after the borrow date/time.');
+    }
+
+    try {
+      await borrowBook({
+        bookId: selectedBook.id ?? selectedBook.book_id,
+        borrowAt,
+        dueAt,
+      });
+
+      setBorrowStatus(`✅ Borrowed "${selectedBook.title}" successfully`);
+
+      // 🔹 Always confirm with the server so the button stays disabled without a reload
+      const selId = Number(selectedBook.id ?? selectedBook.book_id);
+      try {
+        const fresh = await getAvailability(selId); // { available, copies, available_copies, retired }
+        setBooks(prev =>
+          prev.map(b => {
+            const id = Number(b.id ?? b.book_id);
+            return id === selId
+              ? {
+                  ...b,
+                  copies: typeof fresh.copies === 'number' ? fresh.copies : b.copies,
+                  available_copies: typeof fresh.available_copies === 'number'
+                    ? fresh.available_copies
+                    : (b.available_copies ?? b.copies ?? 0),
+                  retired: !!fresh.retired,
+                }
+              : b;
+          })
+        );
+      } catch {
+        // fallback: optimistic local decrement
+        setBooks(prev =>
+          prev.map(b =>
+            Number(b.id ?? b.book_id) === selId
+              ? { ...b, available_copies: Math.max(0, (b.available_copies ?? b.copies) - 1) }
+              : b
+          )
+        );
+      }
+
+      if (new Date(dueAt) < new Date()) {
+        alert('⚠️ Warning: your selected due date is already in the past!');
+      }
+
+      // optional refresh after a short delay (kept from your version)
+      setTimeout(() => {
+        closeBorrowModal();
+        const q = (searchParams.get('q') || '').trim();
+        if (q.length >= 1) {
+          (async () => {
+            try {
+              const data = await searchBooksAPI({ q, page: 1, pageSize: 24, sort: 'relevance' });
+              const rows = Array.isArray(data) ? data : data.books || [];
+              setBooks(rows.map(normalizeBook));
+            } catch {
+              loadBooks(true);
+            }
+          })();
+        } else {
+          loadBooks(true);
+        }
+      }, 600);
+    } catch (err) {
+      setBorrowStatus(`❌ Failed to borrow: ${err.message || 'Unknown error'}`);
+    }
+  }
+
+  // Reviews open/close
+  const openReviews = (book) => {
+    setReviewBook(book);
+    setReviewOpen(true);
+  };
+  const closeReviews = () => {
+    setReviewOpen(false);
+    setReviewBook(null);
+  };
+
+  // Refresh once after closing reviews modal to ensure aggregates are up to date
+  useEffect(() => {
+    if (!reviewOpen && reviewBook) {
+      const q = (searchParams.get('q') || '').trim();
+      if (q.length >= 1) {
+        (async () => {
+          try {
+            const data = await searchBooksAPI({ q, page: 1, pageSize: 24, sort: 'relevance' });
+            const rows = Array.isArray(data) ? data : data.books || [];
+            setBooks(rows.map(normalizeBook));
+          } catch {
+            loadBooks(true);
+          }
+        })();
+      } else {
+        loadBooks(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewOpen]);
+
+  // Receive live aggregates from modal and patch one book immediately
   const handleAggregates = (bookId, avg, count) => {
     setBooks((prev) =>
       prev.map((b) => {
@@ -153,29 +301,30 @@ export default function ViewBooksPage() {
   };
 
   return (
-    <div className="p-4">
-      {loading && <p className="text-gray-600">Loading books...</p>}
-      {error && <p className="text-red-600">{error}</p>}
+    <div className="p-8 max-w-7xl mx-auto">
+      <h1 className="text-3xl font-bold mb-6 text-indigo-700">📖 All Available Books</h1>
+
+      {borrowStatus && (
+        <div className="mb-4 p-3 bg-yellow-100 border border-yellow-400 rounded text-yellow-800">
+          {borrowStatus}
+        </div>
+      )}
 
       <BooksGrid
         books={books}
         loading={loading || searching}
-        onBorrow={openBorrow}
+        onBorrow={openBorrowModal}
         onReviews={openReviews}
-        page={page}
-        pageSize={pageSize}
-        total={total}
-        onPageChange={setPage}
       />
 
       <BorrowModal
-        open={borrowOpen}
+        open={borrowModalOpen}
         book={selectedBook}
         borrowAt={borrowAt}
         dueAt={dueAt}
         setBorrowAt={setBorrowAt}
         setDueAt={setDueAt}
-        onClose={closeBorrow}
+        onClose={closeBorrowModal}
         onSubmit={handleBorrowSubmit}
         status={borrowStatus}
       />
