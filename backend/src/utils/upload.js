@@ -1,9 +1,10 @@
-// src/utils/upload.js
+// backend/src/utils/upload.js
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 
-const uploadDir = path.join(__dirname, '../../uploads');
+// Put book images in backend/uploads/books
+const uploadDir = path.join(__dirname, '../../uploads/books');
 fs.mkdirSync(uploadDir, { recursive: true });
 
 const storage = multer.diskStorage({
@@ -22,7 +23,7 @@ const fileFilter = (_req, file, cb) => {
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
 module.exports = { upload };

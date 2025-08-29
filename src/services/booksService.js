@@ -1,98 +1,144 @@
-// File: src/services/booksService.js
-// Purpose: client-side service wrappers for book-related API calls
-// - Enhanced searchBooksAdvanced: sends both named advanced fields and a fallback `q` (combined)
-// - Trims/validates input, avoids sending empty values
+// src/services/booksService.js
+// Book-related API helpers: cached GET, list, search, availability, and fetchAllBooks (pages automatically).
 
-import { http } from './http';
-
-/** Fetch all books (list page) */
-export async function getBooks() {
-  // backend route: GET /api/books
-  return http('/api/books');
-}
+import http from './http';
 
 /**
- * Legacy quick search used by ViewBooks page (keeps q-based behavior)
- * params: { q, page=1, pageSize=24, sort='relevance', minRating }
- * Backend route: GET /api/books/search/all
+ * Simple in-memory cache for GET endpoints (short TTL).
+ * Keyed by full request path (including query string).
  */
-export async function searchBooks(params = {}) {
-  const qs = new URLSearchParams();
-  const { q, page, pageSize, sort, minRating } = params;
+const CACHE_TTL_MS = 30 * 1000; // 30s
+const cache = new Map();
+const inflight = new Map();
 
-  if (q != null && String(q).trim() !== '') qs.set('q', String(q).trim());
-  if (page) qs.set('page', String(page));
-  if (pageSize) qs.set('pageSize', String(pageSize));
-  if (sort) qs.set('sort', String(sort));
-  if (minRating != null) qs.set('minRating', String(minRating));
-
-  const query = qs.toString() ? `?${qs.toString()}` : '';
-  return http(`/api/books/search/all${query}`);
-}
-
-/**
- * Advanced search with multiple filters:
- * Accepts: { title, author, genre, publisher, page, pageSize, minRating }
- *
- * This function:
- *  - includes named params (title, author, genre, publisher) which the server may accept,
- *  - also builds a combined `q` from non-empty fields as a fallback in case backend only honors q.
- */
-export async function searchBooksAdvanced(filters = {}) {
-  const qs = new URLSearchParams();
-  const {
-    title = '',
-    author = '',
-    genre = '',
-    publisher = '',
-    page,
-    pageSize,
-    minRating,
-  } = filters || {};
-
-  // small helper: add only if meaningful
-  const addIf = (key, value) => {
-    if (value == null) return;
-    const s = String(value).trim();
-    if (s.length > 0) qs.set(key, s);
-  };
-
-  // Add named advanced fields
-  addIf('title', title);
-  addIf('author', author);
-  addIf('genre', genre);
-  addIf('publisher', publisher);
-
-  // Also set 'q' as a combined fallback (helps backends that accept global q only)
-  const combined = [title, author, genre, publisher]
-    .map((x) => (x == null ? '' : String(x).trim()))
-    .filter(Boolean)
-    .join(' ')
-    .trim();
-  if (combined) qs.set('q', combined);
-
-  // pagination + extras
-  if (page) qs.set('page', String(page));
-  if (pageSize) qs.set('pageSize', String(pageSize));
-  if (minRating != null) qs.set('minRating', String(minRating));
-
-  const query = qs.toString() ? `?${qs.toString()}` : '';
-
-  // Helpful debug (only prints in browser console)
-  if (typeof window !== 'undefined' && window.console && window.location) {
-    // Only when running locally or dev; won't hurt in prod but you can remove it
-    console.debug('[booksService] searchBooksAdvanced ->', `/api/books/search/all${query}`);
+function cacheGet(key) {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt && entry.expiresAt < Date.now()) {
+    cache.delete(key);
+    return null;
   }
+  return entry.data;
+}
 
+function cacheSet(key, data, ttl = CACHE_TTL_MS) {
+  cache.set(key, { data, expiresAt: Date.now() + ttl });
+}
+
+/**
+ * cachedGet: dedupe inflight requests and cache results.
+ * Returns whatever `http()` returns (usually parsed JSON).
+ */
+async function cachedGet(path, opts = {}) {
+  const key = path;
+  const cached = cacheGet(key);
+  if (cached !== null) return cached;
+  if (inflight.has(key)) return inflight.get(key);
+
+  const p = (async () => {
+    try {
+      const res = await http(path, opts);
+      cacheSet(key, res);
+      return res;
+    } finally {
+      inflight.delete(key);
+    }
+  })();
+
+  inflight.set(key, p);
+  return p;
+}
+
+/**
+ * GET /api/books?page=...&pageSize=...
+ * Backend in this project returns an array of book rows for this route.
+ */
+export async function getBooks({ page = 1, pageSize = 24 } = {}) {
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('pageSize', String(pageSize));
+  const path = `/api/books?${params.toString()}`;
+  return cachedGet(path);
+}
+
+/**
+ * searchBooks (legacy q-based search used by some pages)
+ * Calls backend `/api/books/search/all?q=...&page=...&pageSize=...`
+ */
+export async function searchBooks({ q = '', page = 1, pageSize = 24, sort = 'relevance', minRating } = {}) {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  params.set('page', String(page));
+  params.set('pageSize', String(pageSize));
+  if (sort) params.set('sort', sort);
+  if (minRating) params.set('minRating', String(minRating));
+  const query = params.toString() ? `?${params.toString()}` : '';
   return http(`/api/books/search/all${query}`);
 }
 
 /**
- * Keep getAvailability exported here; other parts of the app use it.
+ * Advanced search wrapper (keeps flexible payload).
+ * Example payload keys: title, author, genre, publisher, q, page, pageSize, sort, minRating
+ */
+export async function searchBooksAdvanced(payload = {}) {
+  const params = new URLSearchParams();
+  Object.keys(payload || {}).forEach((k) => {
+    const v = payload[k];
+    if (v === undefined || v === null) return;
+    const s = String(v).trim();
+    if (s === '') return;
+    params.set(k, s);
+  });
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  return http(`/api/books/search/all${qs}`);
+}
+
+/**
+ * Fetch single book availability (cached).
+ * Backend route: GET /api/books/:id/availability
  */
 export async function getAvailability(bookId) {
   if (bookId === undefined || bookId === null) {
     throw new Error('getAvailability: bookId is required');
   }
-  return http(`/api/books/${bookId}/availability`);
+  return cachedGet(`/api/books/${bookId}/availability`);
+}
+
+/**
+ * fetchAllBooks(batchSize = 200)
+ *
+ * Repeatedly calls getBooks({ page, pageSize }) and accumulates results until
+ * a page returns fewer than batchSize items. Returns an array of rows.
+ *
+ * Use with caution on very large datasets — if you have thousands of books, prefer
+ * a "Load more" approach or server-side endpoint that returns everything in one shot.
+ */
+export async function fetchAllBooks(batchSize = 200) {
+  const all = [];
+  let page = 1;
+
+  while (true) {
+    const data = await getBooks({ page, pageSize: batchSize });
+
+    // backend might return an array directly, or { books: [...] } or { data: [...] }
+    const rows = Array.isArray(data) ? data : (data && (data.books || data.data || []));
+    if (!Array.isArray(rows)) break;
+    if (rows.length === 0) break;
+
+    all.push(...rows);
+
+    if (rows.length < batchSize) break; // last page
+    page += 1;
+
+    // safety guard
+    if (page > 1000) break;
+  }
+
+  return all;
+}
+
+/** Debug helper */
+export function _clearBooksCache() {
+  cache.clear();
+  inflight.clear();
 }

@@ -165,15 +165,30 @@ async function adjustAvailable(req, res) {
 }
 
 // -------- Upload image
+// inside backend/src/controllers/admin.controller.js
+
 async function uploadImage(req, res) {
   try {
     const db = req.db;
     const bookId = Number(req.params.id);
-    if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
 
-    const imageUrl = `/uploads/${req.file.filename}`;
-    await db.execute('UPDATE books SET image_url = ? WHERE book_id = ?', [imageUrl, bookId]);
-    await writeStaffLog(db, req.user?.id, `Updated image for book #${bookId} -> ${imageUrl}`);
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image uploaded' });
+    }
+
+    // Our storage now saves in /uploads/books
+    const imageUrl = `/uploads/books/${req.file.filename}`;
+
+    await db.execute(
+      'UPDATE books SET image_url = ? WHERE book_id = ?',
+      [imageUrl, bookId]
+    );
+
+    await writeStaffLog(
+      db,
+      req.user?.id,
+      `Updated image for book #${bookId} -> ${imageUrl}`
+    );
 
     res.json({ message: 'Image uploaded', image_url: imageUrl });
   } catch (err) {
@@ -181,6 +196,7 @@ async function uploadImage(req, res) {
     res.status(500).json({ error: err.message || 'Failed to upload image' });
   }
 }
+
 
 // -------- Delete book
 async function deleteBook(req, res) {
