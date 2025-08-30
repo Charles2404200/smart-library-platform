@@ -2,26 +2,48 @@
 import React from 'react';
 import { resolveImageUrl } from '../../utils/resolveImageUrl';
 
+function joinish(v) {
+  if (!v) return '';
+  if (Array.isArray(v)) return v.filter(Boolean).join(', ');
+  return String(v);
+}
+
 export default function BookCard({ book, onBorrow, onReviews, onReview }) {
   const avail = Number(book.available_copies ?? book.copies ?? 0);
   const isRetired = !!(book.retired || book._retired);
   const handleReviews = onReviews || onReview;
 
-  const id = Number(book.id ?? book.book_id); // normalized id
-
   const avg = Number(book.avg_rating ?? book.average_rating ?? book.avgRating ?? 0);
   const count = Number(book.reviews_count ?? book.review_count ?? book.countReviews ?? 0);
-  const full = Math.round(avg);
-  const stars = Array.from({ length: 5 }, (_, i) => (i < full ? '★' : '☆')).join('');
+
+  const fullStars = Math.floor(avg);
+  const hasHalfStar = avg - fullStars >= 0.5;
+  const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
 
   const imgSrc = resolveImageUrl(book.full_image_url || book.image_url);
 
-  // Flexible: supports "authors" as string or array; "publisher" or "publishers"
-  const authors = Array.isArray(book.authors)
-    ? book.authors.join(', ')
-    : (book.authors || '');
-  const publisher = book.publisher
-    || (Array.isArray(book.publishers) ? book.publishers.join(', ') : (book.publishers || ''));
+  const authors = joinish(
+    book.authors ??
+    book.author_list ??
+    book.author_names ??
+    book.authorNames ??
+    book.authorName ??
+    book.author
+  );
+  const publisher = joinish(
+    book.publisher ??
+    book.publisher_name ??
+    book.publisherName ??
+    book.publisher_names ??
+    book.publishers
+  );
+  const genre = joinish(
+    book.genre ??
+    book.genres ??
+    book.category ??
+    book.categories ??
+    book.tags
+  );
 
   return (
     <div className="bg-white p-4 border rounded-lg shadow hover:shadow-md transition">
@@ -35,11 +57,13 @@ export default function BookCard({ book, onBorrow, onReviews, onReview }) {
       )}
 
       <div className="flex items-start justify-between gap-2">
-        <h2 className="text-xl font-semibold text-indigo-600">{book.title}</h2>
+        <h2 className="text-xl font-semibold text-indigo-600">
+          {book.title ?? book.name ?? 'Untitled'}
+        </h2>
       </div>
 
-      {/* Author + publisher */}
-      <div className="text-sm text-gray-600 mt-1">
+      {/* Metadata: Author / Publisher / Genre */}
+      <div className="text-sm text-gray-600 mt-2 space-y-1">
         {authors && (
           <p className="truncate" title={authors}>
             <span className="font-medium text-gray-700">Author:</span> {authors}
@@ -50,10 +74,26 @@ export default function BookCard({ book, onBorrow, onReviews, onReview }) {
             <span className="font-medium text-gray-700">Publisher:</span> {publisher}
           </p>
         )}
+        {genre && (
+          <p className="truncate" title={genre}>
+            <span className="font-medium text-gray-700">Genre:</span> {genre}
+          </p>
+        )}
       </div>
 
-      <div className="text-sm text-gray-500 mb-2 mt-2">
-        {stars} <span className="ml-1">({count})</span>
+      {/* Star Rating */}
+      <div className="text-sm text-gray-500 mb-2 mt-2 flex items-center">
+        {/* Full stars */}
+        {Array.from({ length: fullStars }).map((_, i) => (
+          <span key={`full-${i}`} className="text-yellow-500">★</span>
+        ))}
+        {/* Half star */}
+        {hasHalfStar && <span className="text-yellow-500">☆</span>}
+        {/* Empty stars */}
+        {Array.from({ length: emptyStars }).map((_, i) => (
+          <span key={`empty-${i}`} className="text-gray-300">★</span>
+        ))}
+        <span className="ml-2 text-gray-600 text-xs">({count} reviews)</span>
       </div>
 
       <div className="flex items-center gap-2 mb-3">
@@ -70,7 +110,6 @@ export default function BookCard({ book, onBorrow, onReviews, onReview }) {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* IMPORTANT: call onBorrow, do not navigate; also set type="button" */}
         <button
           type="button"
           className={`px-4 py-2 rounded ${
