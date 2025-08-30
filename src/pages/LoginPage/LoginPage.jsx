@@ -24,7 +24,6 @@ export default function LoginPage() {
 
       alert('Login successful!');
       navigate('/');
-      // If your app reads auth from localStorage at boot:
       window.location.reload();
     } catch (err) {
       alert(err.message || 'Login failed.');

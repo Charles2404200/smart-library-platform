@@ -29,8 +29,7 @@ mongoose.connect(process.env.MONGODB_URI, {
 .catch((err) => console.error('❌ MongoDB connection error:', err));
 
 /* ---------------- CORS & Body Parsers ---------------- */
-// If you use Authorization headers (Bearer token), you DON'T need cookies/credentials.
-// Set explicit origins so preflight passes and allow Authorization header.
+
 app.use(cors({
   origin: function (origin, callback) {
     const allowed = ['http://localhost:5173', 'http://localhost:4000'];
@@ -74,7 +73,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Place your default file at: backend/public/assets/default.epub
 app.use('/assets', express.static(path.join(__dirname, '../public/assets')));
 
-// (Optional) serve pdf.js UI if you also use the PDF reader anywhere
+
 app.use('/pdfjs', express.static(path.join(__dirname, '../public/pdfjs')));
 
 /* ---------------- Routes ---------------- */
@@ -90,8 +89,7 @@ app.use('/api/review',  require('./routes/review.routes'));
 // ⭐ Mount the ebooks routes (required by the reader)
 app.use('/api/ebooks',  require('./routes/ebook.routes'));
 
-// (If you have a separate reading analytics router that you actually use, mount it too)
-// app.use('/api/reading-analytics', require('./routes/readingAnalytics.routes'));
+
 
 /* ---------------- Health ---------------- */
 app.get('/', (_req, res) => res.send('📚 Smart Library Platform API is live!'));

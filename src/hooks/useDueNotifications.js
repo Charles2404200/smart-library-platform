@@ -11,7 +11,7 @@ export default function useDueNotifications(activeBorrows) {
     if (!('Notification' in window)) return;
 
     const now = Date.now();
-    const ahead = 60 * 60 * 1000; // 1h trước hạn
+    const ahead = 60 * 60 * 1000; // 1 hour ahead
 
     activeBorrows.forEach((item) => {
       const due = new Date(item.dueAt).getTime();

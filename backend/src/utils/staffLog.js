@@ -1,8 +1,6 @@
 // src/utils/staffLog.js
-/**
- * Ghi log bằng stored procedure LogStaffAction; nếu lỗi → fallback insert trực tiếp.
- */
-async function writeStaffLog(dbOrConn, staffId, action) {
+
+ async function writeStaffLog(dbOrConn, staffId, action) {
   let msg = action || '';
   if (msg.length > 255) msg = msg.slice(0, 252) + '...';
 

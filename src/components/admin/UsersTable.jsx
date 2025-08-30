@@ -6,8 +6,6 @@ import React from 'react';
  * Props:
  *  - users: Array<User>
  *  - loading: boolean
- *
- * NOTE: Role-changing UI has been removed per request.
  */
 export default function UsersTable({ users = [], loading = false /* onChangeRole */ }) {
   return (
