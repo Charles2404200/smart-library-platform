@@ -90,8 +90,7 @@ export function useSearch(initialFilters = { title: '', author: '', genre: '', p
       const normalized = rows.map(normalizeBook);
       setBooks(normalized);
 
-      // If you want aggregates automatically, keep this; otherwise call hydrateAggregates only on demand (recommended).
-      // hydrateAggregates(normalized);
+    
       return normalized;
     } catch (err) {
       console.error('[useSearch] Search failed:', err);

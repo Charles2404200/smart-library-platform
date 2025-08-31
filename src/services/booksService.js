@@ -109,9 +109,6 @@ export async function getAvailability(bookId) {
  *
  * Repeatedly calls getBooks({ page, pageSize }) and accumulates results until
  * a page returns fewer than batchSize items. Returns an array of rows.
- *
- * Use with caution on very large datasets — if you have thousands of books, prefer
- * a "Load more" approach or server-side endpoint that returns everything in one shot.
  */
 export async function fetchAllBooks(batchSize = 200) {
   const all = [];

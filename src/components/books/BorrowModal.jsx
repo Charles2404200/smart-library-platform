@@ -13,11 +13,7 @@ import React from 'react';
  *  - onClose: function
  *  - onSubmit: function  (called when user confirms borrow; parent handles the actual API call)
  *  - status: string | null (status messages to display)
- *
- * Notes:
- *  - inputs are controlled and never receive `null` as value; use empty string fallback.
- *  - onSubmit is called with no args (matches your ViewBooks implementation).
- */
+*/
 export default function BorrowModal({
   open,
   book,
@@ -39,12 +35,7 @@ export default function BorrowModal({
     e.preventDefault();
     // Basic validation: ensure dates present (you can add more rules if desired)
     if (!borrowVal || !dueVal) {
-      // If parent expects to receive this via status prop, parent can set it.
-      // Here we do a simple alert to give immediate feedback.
-      // Optionally you can call a parent callback to set status; we keep simple.
-      // But we avoid throwing or returning null.
-      // You can also setStatus via parent by calling a passed-in setter.
-      // For now, call onSubmit anyway; parent can check values in its state.
+    
       return onSubmit && onSubmit();
     }
     return onSubmit && onSubmit();

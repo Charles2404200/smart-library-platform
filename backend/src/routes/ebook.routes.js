@@ -26,10 +26,7 @@ function readJsonBody(req) {
  * - Verifies the user has an active borrow
  * - Starts a Mongo reading session
  * - Returns sessionId + (optional) streaming URL with short-lived token
- *
- * For your current “fakebook” setup, we return /assets/fakebook.pdf so the
- * frontend can render immediately, but the analytics session is still real.
- */
+ **/
 router.post('/:bookId/open', authenticateJWT, async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -62,7 +59,7 @@ router.post('/:bookId/open', authenticateJWT, async (req, res) => {
       meta: {},
     });
 
-    // Optional: short-lived token if you enable /content streaming later
+    
     const token = signReaderToken({ userId, bookId, sessionId });
 
     return res.json({
@@ -76,21 +73,10 @@ router.post('/:bookId/open', authenticateJWT, async (req, res) => {
   }
 });
 
-/**
- * (Optional) GET /api/ebooks/:bookId/content?token=...
- * Streams the actual PDF/EPUB if you want server-side protected files.
- * Not used by your current FE (which loads /assets/fakebook.pdf directly).
- * Keep for future readiness; comment out if not needed.
- */
-// router.get('/:bookId/content', authenticateJWT, async (req, res) => {
-//   // Example skeleton if you later switch to protected streaming
-// });
+
 
 /**
  * POST /api/ebooks/:bookId/progress
- * Accepts { sessionId, pagePercent?, cfi?, page? }
- * - page -> will be added to pagesRead (dedup handled in service)
-//  - pagePercent/cfi -> stored under meta
  */
 router.post('/:bookId/progress', authenticateJWT, async (req, res) => {
   try {

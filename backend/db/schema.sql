@@ -4,8 +4,7 @@
 -- ======================================
 
 /* --------------------------------------
-   Drop (in dependency order) — optional
-   Comment this whole block if you want to preserve data
+   Drop (in dependency order)
 --------------------------------------- */
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS staff_log;
@@ -51,7 +50,7 @@ CREATE TABLE IF NOT EXISTS books (
   copies INT NOT NULL DEFAULT 1,
   available_copies INT NOT NULL DEFAULT 1,
   image_url VARCHAR(255) NULL,
-  file_path VARCHAR(255) NULL, -- ✅ this line must exist
+  file_path VARCHAR(255) NULL, 
   retired TINYINT(1) NOT NULL DEFAULT 0,
   retired_at DATETIME NULL,
   retired_by INT NULL,
@@ -70,7 +69,7 @@ CREATE TABLE IF NOT EXISTS book_authors (
   CONSTRAINT fk_book_authors_author FOREIGN KEY (author_id) REFERENCES authors(author_id) ON DELETE CASCADE
 );
 
--- Optional: mirror M2M publishers if you want multi-publisher books
+
 CREATE TABLE IF NOT EXISTS book_publishers (
   book_id INT NOT NULL,
   publisher_id INT NOT NULL,

@@ -51,7 +51,7 @@ export const changeUserRole = (userId, role) =>
     body: { role },
   });
 
-/* -------- NEW: Retire / Unretire -------- */
+/* -------- Retire / Unretire -------- */
 export const retireBook = (bookId) =>
   http(`/api/admin/books/${bookId}/retire`, {
     method: 'POST',

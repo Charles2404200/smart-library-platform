@@ -5,8 +5,6 @@ import SearchForm from '../../components/search/SearchForm';
 import SearchResults from '../../components/search/SearchResults';
 import { searchBooksAdvanced, getAvailability } from '../../services/booksService';
 import { borrowBook } from '../../services/borrowService';
-
-// MISSING BEFORE — these must be imported or the page will crash at render time
 import BorrowModal from '../../components/books/BorrowModal';
 import ReviewsModal from '../../components/reviews/ReviewsModal';
 
