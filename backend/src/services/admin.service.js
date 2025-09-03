@@ -47,7 +47,7 @@ async function upsertAuthorByName(conn, name) {
 }
 
 /* =========================
-   New: retire / unretire helpers
+   retire / unretire helpers
    ========================= */
 
 /** Set retired flag for a book. Returns true if a row was updated. */
@@ -67,13 +67,12 @@ async function unretireBook(conn, bookId) {
   return setBookRetired(conn, bookId, false);
 }
 
-/** Optional: fetch just the retired flag (for guards/UI) */
 async function getBookRetiredFlag(conn, bookId) {
   const [rows] = await conn.query(
     'SELECT retired FROM books WHERE book_id = ? LIMIT 1',
     [Number(bookId)]
   );
-  return rows.length ? !!rows[0].retired : null; // null = not found
+  return rows.length ? !!rows[0].retired : null;
 }
 
 module.exports = {

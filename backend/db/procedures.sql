@@ -67,8 +67,6 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Book not found';
   END IF;
 
-  -- optional clamp (kept as comment)
-  -- UPDATE books SET available_copies = LEAST(available_copies, copies) WHERE book_id = pBookId;
 
   INSERT INTO staff_log (staffId, action, createdAt)
   VALUES (pStaffId,
@@ -208,9 +206,6 @@ END;
 
 /* -------------------------------------------------
    UpdateBookInventory: admin sets total copies.
-   Preserve the number currently borrowed and recompute availability:
-     borrowed = old_copies - old_available
-     new_available = GREATEST(0, pNewCopies - borrowed)
 -------------------------------------------------- */
 DROP PROCEDURE IF EXISTS UpdateBookInventory;
 CREATE PROCEDURE UpdateBookInventory(
@@ -263,7 +258,6 @@ END;
 
 /* -------------------------------------------------
    UpdateBookAvailable: admin sets available_copies directly.
-   Keep borrowed constant; adjust total copies to borrowed + new available.
 -------------------------------------------------- */
 DROP PROCEDURE IF EXISTS UpdateBookAvailable;
 CREATE PROCEDURE UpdateBookAvailable(
@@ -294,7 +288,6 @@ BEGIN
   -- clamp requested available to >= 0
   SET vAdjAvail = GREATEST(0, pNewAvailable);
 
-  -- keep borrowed constant; adjust total copies to borrowed + new available
   UPDATE books
   SET copies = vBorrowed + vAdjAvail,
       available_copies = vAdjAvail

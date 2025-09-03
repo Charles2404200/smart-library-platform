@@ -6,14 +6,6 @@ import ReviewForm from './ReviewForm';
 
 /**
  * ReviewsModal
- *
- * Props:
- *  - open (bool)
- *  - onClose () => void
- *  - book (object) - expects book.id or book.book_id
- *  - currentUser (object)
- *  - isAuthenticated (bool)
- *  - onAggregates (bookId, avg, count) => void  (optional) - called after successful create/delete to update parent aggregates
  */
 export default function ReviewsModal({
   open,

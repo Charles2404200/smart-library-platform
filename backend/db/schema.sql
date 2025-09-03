@@ -141,10 +141,6 @@ CREATE TABLE IF NOT EXISTS staff_log (
 
 -- ======================
 -- Trigger: auto-compute isLate when returnAt is set or updated
--- (single-statement trigger body; no DELIMITER needed)
--- Policy:
---   - if dueAt is NOT NULL → Late when returnAt > dueAt
---   - if dueAt is NULL     → Late when (returnAt - checkoutAt) > 14 days
 -- ======================
 
 DROP TRIGGER IF EXISTS checkout_set_isLate;

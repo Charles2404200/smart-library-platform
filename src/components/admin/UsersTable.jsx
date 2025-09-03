@@ -3,9 +3,6 @@ import React from 'react';
 
 /**
  * UsersTable
- * Props:
- *  - users: Array<User>
- *  - loading: boolean
  */
 export default function UsersTable({ users = [], loading = false /* onChangeRole */ }) {
   return (

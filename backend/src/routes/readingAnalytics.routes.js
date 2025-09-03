@@ -47,7 +47,6 @@ function sendMaybeCsv(res, data, { filename = 'report.csv', fields = [], format 
 
 /**
  * GET /api/analytics/reports/avg-session-time?from=2025-08-01&to=2025-08-31&format=json|csv
- * Response (json): { data: [{ userId, sessions, avgSessionMs, avgSessionMinutes }] }
  */
 router.get('/reports/avg-session-time', authenticateJWT, async (req, res) => {
   try {
@@ -71,7 +70,6 @@ router.get('/reports/avg-session-time', authenticateJWT, async (req, res) => {
 
 /**
  * GET /api/analytics/reports/most-highlighted?limit=10&from=...&to=...&format=json|csv
- * Response (json): { data: [{ bookId, highlightsCount }] }
  */
 router.get('/reports/most-highlighted', authenticateJWT, async (req, res) => {
   try {
@@ -94,7 +92,6 @@ router.get('/reports/most-highlighted', authenticateJWT, async (req, res) => {
 
 /**
  * GET /api/analytics/reports/top-books-time?limit=10&from=...&to=...&format=json|csv
- * Response (json): { data: [{ bookId, sessions, totalMs, totalHours }] }
  */
 router.get('/reports/top-books-time', authenticateJWT, async (req, res) => {
   try {

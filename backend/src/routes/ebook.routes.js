@@ -25,7 +25,6 @@ function readJsonBody(req) {
  * POST /api/ebooks/:bookId/open
  * - Verifies the user has an active borrow
  * - Starts a Mongo reading session
- * - Returns sessionId + (optional) streaming URL with short-lived token
  **/
 router.post('/:bookId/open', authenticateJWT, async (req, res) => {
   try {
@@ -45,8 +44,6 @@ router.post('/:bookId/open', authenticateJWT, async (req, res) => {
       if (!ok) return res.status(403).json({ error: 'Borrow this book before reading' });
     }
 
-    // If you later want per-book files, use fetchBookFilePath(req.db, bookId)
-    // and return a signed /content URL. For now we stick to your fakebook asset:
     const fileUrl = '/assets/fakebook.pdf';
 
     // Start analytics session in Mongo
@@ -64,8 +61,8 @@ router.post('/:bookId/open', authenticateJWT, async (req, res) => {
 
     return res.json({
       sessionId: String(sessionId),
-      token,     // FE may ignore this for now
-      fileUrl,   // current demo uses static fakebook asset
+      token,     
+      fileUrl,  
     });
   } catch (e) {
     console.error('open error', e);

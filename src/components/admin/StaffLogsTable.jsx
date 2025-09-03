@@ -3,9 +3,6 @@ import React from 'react';
 
 /**
  * StaffLogsTable
- * Props:
- *  - logs: Array<Log>
- *  - loading: boolean
  */
 export default function StaffLogsTable({ logs = [], loading = false }) {
   // --- Pagination

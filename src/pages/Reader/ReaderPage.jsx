@@ -40,7 +40,7 @@ export default function ReaderPage() {
       const res = await startSession(id, 'web');
       setSessionId(res.sessionId);
 
-      // 1) Create epub Book & render quickly
+      // Create epub Book & render quickly
       const book = ePub(DEFAULT_EPUB);
       bookRef.current = book;
 
@@ -56,7 +56,7 @@ export default function ReaderPage() {
       // Display ASAP (no locations yet)
       await rendition.display();
 
-      // 2) Lightweight progress (before locations exist)
+      // Lightweight progress (before locations exist)
       rendition.on('relocated', (location) => {
         try {
           // quick % fallback (epub.js gives 0..1 sometimes)
@@ -68,8 +68,7 @@ export default function ReaderPage() {
         } catch {}
       });
 
-      // 3) Generate locations in the background (can be slow on big books)
-      //    Do it after initial render so UI is responsive.
+      // Generate locations in the background (can be slow on big books)
       (async () => {
         try {
           await book.ready;

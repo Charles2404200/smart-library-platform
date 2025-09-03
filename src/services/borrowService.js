@@ -3,7 +3,6 @@ import { http } from './http';
 
 /**
  * Borrow-related service helpers.
- * Accept both camelCase and snake_case keys from callers so older code kept using snake_case still works.
  */
 
 export function getMyBorrows() {
@@ -19,10 +18,6 @@ export function returnBook(checkoutId) {
 
 /**
  * borrowBook(payload)
- * Accepts payload with any of:
- *  - { bookId, borrowAt, dueAt }
- *  - { book_id, borrow_at, due_at }
- *  - or mixed
  */
 export function borrowBook(payload = {}) {
   const bookId = payload.bookId ?? payload.book_id ?? payload.id ?? payload.bookId;

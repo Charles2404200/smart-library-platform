@@ -1,5 +1,4 @@
 // src/services/booksService.js
-// Book-related API helpers: cached GET, list, search, availability, and fetchAllBooks (pages automatically).
 
 import http from './http';
 
@@ -27,7 +26,7 @@ function cacheSet(key, data, ttl = CACHE_TTL_MS) {
 
 /**
  * cachedGet: dedupe inflight requests and cache results.
- * Returns whatever `http()` returns (usually parsed JSON).
+ * Returns whatever `http()` returns (parsed JSON).
  */
 async function cachedGet(path, opts = {}) {
   const key = path;
@@ -51,7 +50,6 @@ async function cachedGet(path, opts = {}) {
 
 /**
  * GET /api/books?page=...&pageSize=...
- * Backend in this project returns an array of book rows for this route.
  */
 export async function getBooks({ page = 1, pageSize = 24 } = {}) {
   const params = new URLSearchParams();
@@ -78,7 +76,6 @@ export async function searchBooks({ q = '', page = 1, pageSize = 24, sort = 'rel
 
 /**
  * Advanced search wrapper (keeps flexible payload).
- * Example payload keys: title, author, genre, publisher, q, page, pageSize, sort, minRating
  */
 export async function searchBooksAdvanced(payload = {}) {
   const params = new URLSearchParams();

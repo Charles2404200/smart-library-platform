@@ -2,17 +2,6 @@ import React from 'react';
 
 /**
  * BorrowModal
- *
- * Props:
- *  - open: boolean
- *  - book: object (book currently selected)
- *  - borrowAt: string | null  (ISO date or '' expected)
- *  - dueAt: string | null
- *  - setBorrowAt: function
- *  - setDueAt: function
- *  - onClose: function
- *  - onSubmit: function  (called when user confirms borrow; parent handles the actual API call)
- *  - status: string | null (status messages to display)
 */
 export default function BorrowModal({
   open,

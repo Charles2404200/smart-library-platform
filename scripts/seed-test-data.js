@@ -1,14 +1,3 @@
-// scripts/seed-test-data.js
-// Modified: defaults to /api/admin/books and logs created IDs to scripts/seed-results.json
-// ESM; Node 18+ recommended
-//
-// Install deps (once):
-//   npm install --save-dev @faker-js/faker axios dotenv
-//
-// Example run:
-//   node scripts/seed-test-data.js --api http://localhost:4000 --books 50 --users 10
-// Or rely on .env (ADMIN_EMAIL / ADMIN_PASSWORD) to auto-login.
-
 import 'dotenv/config';
 import { faker } from '@faker-js/faker';
 import axios from 'axios';

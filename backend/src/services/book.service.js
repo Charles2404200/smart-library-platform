@@ -1,6 +1,4 @@
 // backend/src/services/book.service.js
-// Robust book service: getAllBooks, getBookById, getAvailability, and searchBooks
-// Supports named advanced filters (title, author, genre, publisher) + legacy q fallback.
 
 /* Helper: escape %, _, \ for SQL LIKE when using ESCAPE '\\' */
 function likeEscape(s) {

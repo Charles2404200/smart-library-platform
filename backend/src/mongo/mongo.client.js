@@ -7,7 +7,6 @@ const EFFECTIVE_URI =
   'mongodb://127.0.0.1:27017/smart_library';
 
 // Determine the database name
-// If MONGO_DB is provided, use that, otherwise extract from URI path or default to "smart_library"
 const EFFECTIVE_DB =
   process.env.MONGO_DB ||
   process.env.MONGODB_DB ||

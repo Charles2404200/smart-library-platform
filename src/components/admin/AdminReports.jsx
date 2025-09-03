@@ -4,10 +4,6 @@ import { getMostBorrowed, getTopReaders, getLowAvailability } from '../../servic
 
 /**
  * AdminReports
- * Small admin-only UI to generate three reports:
- * - Most borrowed books in a time range
- * - Top active readers in a time range
- * - Books with low availability (threshold)
  */
 export default function AdminReports() {
   const [start, setStart] = useState('');

@@ -49,7 +49,6 @@ async function checkAvailability(req, res) {
 // Search books with filters, sorting, and pagination
 async function searchBooksCtrl(req, res) {
   try {
-    // Accept named filters (title, author, genre, publisher) + legacy q
     const {
       q = '',
       title = '',
@@ -63,7 +62,6 @@ async function searchBooksCtrl(req, res) {
     } = req.query;
 
     const rows = await searchBooks(req.db, {
-      // pass both named and legacy q — service will prefer named when present
       q: String(q || ''),
       title: (title || '').toString(),
       author: (author || '').toString(),

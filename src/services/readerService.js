@@ -65,12 +65,7 @@ export async function openEbook(bookId) {
 /** Alias if you prefer this name elsewhere */
 export const startSession = openEbook;
 
-/**
- * Send reading progress with optional fields:
- *  - pagePercent: number (0..100)
- *  - cfi: string (epub location)
- *  - page: number (optional discrete page marker)
- */
+
 export function beaconProgress(bookId, sessionId, payload = {}) {
   const id = Number(bookId);
   if (!sessionId || !Number.isFinite(id) || id <= 0) return;

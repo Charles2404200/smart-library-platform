@@ -4,7 +4,7 @@ import { resolveImageUrl } from '../../utils/resolveImageUrl';
 import { API_URL } from '../../config/env';
 
 /**
- * Admin Books table - simplified/fully compatible upload endpoint logic
+ * Admin Books table
  */
 export default function BooksTable({
   books = [],
@@ -19,7 +19,7 @@ export default function BooksTable({
   onSaveAvailable,
   onRetire,
   onUnretire,
-  onUploadImage, // optional handler provided by parent
+  onUploadImage,
 }) {
   // --- helpers / pagination (kept identical to previous) ---
   const filtered = React.useMemo(() => {
@@ -94,7 +94,6 @@ export default function BooksTable({
   };
 
   // Build a correct upload endpoint irrespective of how API_URL is set.
-  // If API_URL already ends with "/api" we avoid duplicating it.
   function buildAdminUploadUrl(bookId) {
     const base = (API_URL || '').replace(/\/+$/, ''); // strip trailing slashes
     if (!base) return `/api/admin/books/${bookId}/image`;

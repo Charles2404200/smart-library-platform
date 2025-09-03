@@ -1,12 +1,3 @@
-// scripts/seed-mongo.js
-// Direct MongoDB seeder. Use only if you are comfortable writing directly to DB.
-// Uses MONGODB_URI from .env by default.
-// Install: npm install --save-dev mongodb @faker-js/faker dotenv
-//
-// Usage:
-//    node scripts/seed-mongo.js --books 500 --users 50
-// Or rely on .env: MONGODB_URI in your .env will be loaded.
-
 require('dotenv').config();
 const { MongoClient } = require('mongodb');
 const { faker } = require('@faker-js/faker');

@@ -165,7 +165,6 @@ async function adjustAvailable(req, res) {
 }
 
 // -------- Upload image
-// inside backend/src/controllers/admin.controller.js
 
 async function uploadImage(req, res) {
   try {

@@ -90,7 +90,6 @@ export default function BorrowedBooks() {
       await returnBook(checkoutId);
 
       setActionMsg('✅ Book returned successfully.');
-      // Optimistic: only stamp returnAt; let server compute isLate, then reload
       setBorrows(prev =>
         prev.map(b =>
           (b.checkoutId === checkoutId || b.id === checkoutId)

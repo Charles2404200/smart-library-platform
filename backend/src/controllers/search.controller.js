@@ -59,7 +59,7 @@ module.exports.searchAdvanced = async function searchAdvanced(req, res) {
     const params = [];
     const conditions = [];
 
-    // If we need author/publisher joins later, add them by appending LEFT JOINs or using EXISTS subqueries
+  
     if (!hasAuthorCol && authorsTableExists && bookAuthorsExists) {
       // We'll use an EXISTS subquery for author matching later
     }
@@ -71,7 +71,6 @@ module.exports.searchAdvanced = async function searchAdvanced(req, res) {
     // Title
     if (String(title || '').trim().length > 0) {
       if (hasAuthorCol && false) {
-        // unreachable; left for example
       }
       if (bookCols.includes('title')) {
         conditions.push('b.title LIKE ?');
