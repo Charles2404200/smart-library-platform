@@ -139,11 +139,12 @@ See `backend/.env` for all configuration options, including database URLs, JWT s
 - `node db/run-sql.cjs --reset` — Full reset of database
 
 ---
+[Demo Video](https://www.youtube.com/watch?v=0kRyVJe7K-g) |
 
-## License
+## Contributors
 
-MIT
-
----
-
-*For more details, see the source code and comments
+| ID | Name             | Contribution Score |
+|----|------------------|--------------------|
+| s4044176  | Le Anh Minh      | 5                 |
+| s4071162  | Johnny Tran     | 5                 |
+| s3980087  | Dang Minh Tam       | 5                 |

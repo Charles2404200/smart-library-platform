@@ -1,6 +1,5 @@
 -- ======================================
 -- Smart Library Platform - Universal Schema (MySQL 5.7+)
--- No DELIMITER blocks; safe to re-run on empty DB
 -- ======================================
 
 /* --------------------------------------
